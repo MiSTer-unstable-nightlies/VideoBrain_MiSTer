@@ -28,10 +28,10 @@ module videobrain_printer_capture #(
     output reg [7:0] sd_buff_din,
     input wire sd_buff_wr
 );
-localparam IDLE=0, SCAN_REQ=1, WAIT_IO=2, SCAN_CHECK=3, BUILD=4,
+localparam [3:0] IDLE=0, SCAN_REQ=1, WAIT_IO=2, SCAN_CHECK=3, BUILD=4,
            CRC=5, CRC_STORE=6, WRITE_REQ=7, VERIFY_REQ=8, VERIFY_CHECK=9,
            ARM=10, RUN=11, FAULT=12;
-localparam START=1, DATA=2, STOP=3;
+localparam [2:0] START=1, DATA=2, STOP=3;
 reg [3:0] state = IDLE, after_io = IDLE;
 reg readonly = 1, scanning = 0, accepting = 0;
 reg session_open = 0, stopping = 0, rate = 0, drop_tail = 0;
@@ -61,7 +61,7 @@ wire [7:0] stage_crc_q = sd_buff_din;
 wire stage_write = state == BUILD || state == CRC_STORE;
 wire [8:0] stage_write_addr = state == CRC_STORE ? 9'd28 + {7'd0,crc_index} : build_index[8:0];
 wire [7:0] stage_write_data = state == CRC_STORE ? ~build_crc[crc_index*8 +: 8] :
-                              pop ? fifo_q : header_byte(build_index[8:0]);
+                              pop ? fifo_q : header_byte(build_index[8:0], reason);
 wire [8:0] stage_read_addr = state == CRC ? build_index[8:0] : sd_buff_addr;
 reg mount_pending = 0;
 reg [63:0] pending_size = 0;
@@ -93,7 +93,7 @@ function automatic [31:0] crc_byte(input [31:0] c, input [7:0] b);
     end
 endfunction
 
-function automatic [7:0] header_byte(input [8:0] addr);
+function automatic [7:0] header_byte(input [8:0] addr, input [2:0] stop_reason);
     reg [255:0] h;
     begin
         h = 0;
@@ -104,7 +104,7 @@ function automatic [7:0] header_byte(input [8:0] addr);
         h[111:104] = {7'd0,rate};
         h[127:112] = payload_count;
         h[191:128] = length;
-        h[223:192] = kind == STOP ? {29'd0,reason} : 32'd0;
+        h[223:192] = kind == STOP ? {29'd0,stop_reason} : 32'd0;
         header_byte = addr < 32 ? h[addr[4:0]*8 +: 8] : 8'd0;
         if (kind == STOP && addr >= 32 && addr < 48) begin
             case (addr[3:2])

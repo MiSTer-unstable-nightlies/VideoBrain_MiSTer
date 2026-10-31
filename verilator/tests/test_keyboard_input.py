@@ -9,11 +9,11 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from keyboard_input import encode
-from keyboard_input import MODE_LETTERS, MODE_SYMBOLS, MUSIC_BANKS, MUSIC_RECORD, MUSIC_REPLAY, keyboard_text, music, physical_keys
+from keyboard_input import MODE_LETTERS, MODE_SYMBOLS, RTC_INSERT, MUSIC_BANKS, MUSIC_RECORD, MUSIC_REPLAY, keyboard_text, music, physical_keys
 
 
 def events(data):
-    assert data[:4] == b"VBK2"
+    assert data[:4] in (b"VBK2", b"VBK3")
     assert struct.unpack("<H", data[4:6])[0] == len(data) - 8
     crc = 0xffff
     for byte in data[8:]:
@@ -42,6 +42,28 @@ def music_pitches(body):
 
 
 class KeyboardTests(unittest.TestCase):
+    def test_tinybasic_keyboard_round_trip(self):
+        # Tiny BASIC VBCHARS table; BIOS READKBJOY matrix scan order.
+        table = (' I"U!Y\\T&R9E8W7Q'
+                 '%A.O#K)J(H/G-F6D'
+                 '5S4Z1P@L$M:N,B=V'
+                 "+C3X2?0;^'*")
+        text = ('PRINT "A",1\nPRINT 1,2\nPRINT "B",2+3\n'
+                '@(1)=7\nA$="HI"\nPRINT A$\nPRINT LEN(0)\n')
+        symbols = False
+        decoded = []
+        for key, _, _ in events(keyboard_text(text, 'letters', profile='tinybasic')):
+            if key in (MODE_LETTERS, MODE_SYMBOLS):
+                symbols = key == MODE_SYMBOLS
+            elif key == 19:
+                decoded.append(' ')
+            elif key == 27:
+                decoded.append('\n')
+            else:
+                index = 2 * ((key % 4) * 9 + key // 4 + 1) - (not symbols)
+                decoded.append(table[index])
+        self.assertEqual(''.join(decoded), text)
+
     def test_music_timing_presets(self):
         text = 'O4 C R8 O5 B O2 C O4 C'
         self.assertEqual(music(text, 'letters', timing='score'),
@@ -138,6 +160,19 @@ class KeyboardTests(unittest.TestCase):
         for text in ("A 0 8", "A 8 256", "WAIT 0", "UNKNOWN"):
             with self.assertRaises(ValueError):
                 physical_keys(text)
+
+    def test_rtc_clock_script(self):
+        source = Path(__file__).resolve().parents[2] / 'examples' / 'clock-from-rtc.txt'
+        blob = physical_keys(source.read_text())
+        self.assertEqual(blob[:4], b'VBK3')
+        self.assertEqual(events(blob), [
+            (MODE_SYMBOLS, 8, 8), (27, 8, 24), (MODE_LETTERS, 8, 8),
+            (29, 8, 16), (MODE_SYMBOLS, 8, 8), (RTC_INSERT, 8, 8), (17, 8, 8)
+        ])
+        self.assertEqual(blob, source.with_suffix('.vbk').read_bytes())
+        self.assertEqual(physical_keys('SHIFT\nG')[:4], b'VBK2')
+        with self.assertRaises(ValueError):
+            physical_keys('RTC 0 8')
 
     def test_standard_symbols_and_initial_mode(self):
         a = events(keyboard_text('A,;?1', 'letters', hold_final=True))

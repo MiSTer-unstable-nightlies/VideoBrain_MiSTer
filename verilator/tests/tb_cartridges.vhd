@@ -285,6 +285,66 @@ BEGIN
     fallback <= to_unsigned(CART_STD, 8); tick;
     read_at(16#1800#, 17); read_at(16#3800#, 255);
 
+    fallback <= to_unsigned(CART_BASIC, 8); tick;
+    read_at(16#1000#, 16);
+    FOR i IN 0 TO 4095 LOOP
+      write_at(16#3000# + i, (i + i / 256) MOD 256);
+    END LOOP;
+    FOR i IN 0 TO 1023 LOOP
+      write_at(16#1800# + i, (i * 3 + i / 256) MOD 256);
+    END LOOP;
+    FOR bank IN 0 TO 7 LOOP
+      write_at(16#17FF#, bank + 16#F8#);
+      read_at(16#1000#, 16 + bank);
+      read_at(16#17FF#, 16 + bank);
+      dma_at(16#1000#, 16 + bank);
+      dma_at(16#17FF#, 16 + bank);
+      -- Other ROM writes and reads of the select address do not select banks.
+      write_at(16#1000#, 0);
+      write_at(16#17FE#, 0);
+      read_at(16#1000#, 16 + bank);
+      FOR i IN 0 TO 1023 LOOP
+        read_at(16#1800# + i, (i * 3 + i / 256) MOD 256);
+        read_at(16#1C00# + i, (i * 3 + i / 256) MOD 256);
+        dma_at(16#1800# + i, (i * 3 + i / 256) MOD 256);
+        dma_at(16#1C00# + i, (i * 3 + i / 256) MOD 256);
+      END LOOP;
+      FOR i IN 0 TO 4095 LOOP
+        read_at(16#3000# + i, (i + i / 256) MOD 256);
+      END LOOP;
+    END LOOP;
+    reset_na <= '0'; tick; reset_na <= '1'; tick;
+    read_at(16#1000#, 16);
+    read_at(16#1800#, 0); read_at(16#1801#, 3);
+    read_at(16#3001#, 1); read_at(16#3FFF#, 14);
+    write_at(16#17FF#, 7);
+    power_cycle <= '1'; reset_na <= '0'; tick;
+    power_cycle <= '0';
+    FOR i IN 0 TO 1023 LOOP tick; END LOOP;
+    ASSERT power_busy = '0' REPORT "BASIC power clear did not finish" SEVERITY failure;
+    reset_na <= '1'; tick;
+    read_at(16#1000#, 16);
+    read_at(16#1801#, 0); dma_at(16#1C01#, 0);
+    read_at(16#3001#, 1); read_at(16#3FFF#, 14);
+    write_at(16#17FF#, 7);
+    cart_unload <= '1'; tick; cart_unload <= '0'; tick;
+    read_at(16#1000#, 255); dma_at(16#1800#, 255);
+    dl_index <= to_unsigned(2, 8); dl_wr <= '1';
+    FOR i IN 0 TO 16383 LOOP
+      dl_addr <= to_unsigned(i, 16);
+      dl_data <= to_unsigned(i / 2048 + 16, 8);
+      tick;
+    END LOOP;
+    dl_wr <= '0'; dl_index <= x"FF"; tick; tick;
+    read_at(16#1000#, 16);
+    write_at(16#17FF#, 7);
+    dl_index <= to_unsigned(2, 8); dl_wr <= '1';
+    dl_addr <= x"0000"; dl_data <= x"10"; tick;
+    dl_wr <= '0'; dl_index <= x"FF"; tick; tick;
+    read_at(16#1000#, 16);
+    fallback <= to_unsigned(CART_STD, 8); tick;
+    read_at(16#3000#, 255);
+
     -- the retired download index must not alter ram or pause the cpu
     write_at(16#0FE2#, 16#A5#);
     dl_index <= to_unsigned(4, 8); dl_wr <= '1';
@@ -381,6 +441,11 @@ BEGIN
     fallback <= to_unsigned(CART_TIMESHARE, 8); tick;
     ASSERT joy_base = 2644 AND joy_step = 24
       REPORT "Mapper fallback changed joystick preset" SEVERITY failure;
+    fallback <= to_unsigned(CART_BASIC, 8); tick;
+    write_at(16#1800#, 16#A5#);
+    write_at(16#17FF#, 7);
+    read_at(16#1800#, 0); dma_at(16#1800#, 0);
+    read_at(16#3000#, 255);
     load_signature(4096, x"BB09D7FB", 7); -- gladiator crc e6a88a49
     load_signature(4096, x"78F61A44", 24, 2644);
     load_signature(2048, x"23469D84", 7); -- tennis crc, wrong length
@@ -393,7 +458,7 @@ BEGIN
     ASSERT cart_loaded = '0' AND apl_available = '0' AND
            joy_base = 2580 AND joy_step = 7
       REPORT "Unload retained cartridge state" SEVERITY failure;
-    FOR mapper IN CART_STD TO CART_INFOMAN LOOP
+    FOR mapper IN CART_STD TO CART_BASIC LOOP
       fallback <= to_unsigned(mapper, 8); tick;
       read_at(16#1000#, 255); read_at(16#1800#, 255);
       read_at(16#3000#, 255); read_at(16#3800#, 255);

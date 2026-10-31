@@ -37,6 +37,9 @@ ENTITY f8_cpu IS
     ce       : IN std_logic;
     reset_na : IN std_logic;
     power_cycle : IN std_logic := '0';
+    clock_seed_we : IN std_logic := '0';
+    clock_seed_addr : IN unsigned(5 DOWNTO 0) := (OTHERS => '0');
+    clock_seed_data : IN uv8 := (OTHERS => '0');
 
     intreq   : IN std_logic;
     acco     : OUT uv8;
@@ -115,6 +118,13 @@ BEGIN
           clear_active <= '0';
         ELSE
           clear_addr <= clear_addr + 1;
+        END IF;
+      ELSIF reset_na='1' AND clock_seed_we='1' THEN
+        IF clock_seed_addr=22 THEN
+          -- Bit 6 enables the independently configured alarm.
+          scratch_regs(22) <= clock_seed_data OR (scratch_regs(22) AND x"40");
+        ELSE
+          scratch_regs(to_integer(clock_seed_addr)) <= clock_seed_data;
         END IF;
       ELSIF reset_na='1' AND sreg_wr='1' THEN
         scratch_regs(sreg_wa)<=sreg_wd;

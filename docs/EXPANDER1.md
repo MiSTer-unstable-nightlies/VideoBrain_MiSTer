@@ -63,7 +63,23 @@ Full duplex expects the host to echo typed characters. If typing is invisible, e
 
 ### Internet connection
 
-The tested MiSTer installation provides `/usr/bin/telnet`, `/usr/bin/socat`, `/usr/bin/python3`, and `/usr/bin/nc`; only Telnet and socat are needed here. Stop any UART diagnostic or local service before starting the bridge. Run over SSH:
+Copy [telehack.sh](../tools/telehack.sh) to `/media/fat/Scripts/` and run
+**telehack** from MiSTer's Scripts menu. Return to the VideoBrain core, load
+Expander 1 firmware and Timeshare, select UART connection **None** and UART
+Output **Modem**, then press **F5** in Timeshare. The script waits for that
+Carriage Return before connecting at 300 baud, so the banner arrives only
+after Timeshare is transmitting. This confirms UART input, not cartridge
+identity. Keep Timeshare at its default 300 baud and full duplex.
+
+The bridge runs in the background. Run the script again to stop it, including
+while it is waiting for F5. After a disconnection, run it again to reconnect.
+Status and errors are written to `/tmp/videobrain-telehack.log`. The launcher
+requires Bash, flock, nohup, readlink, stty, socat and telnet; it does not install them.
+Stop other UART services first. The display setup below still applies.
+
+For a foreground connection instead, use SSH. The tested MiSTer installation
+provides `/usr/bin/telnet` and `/usr/bin/socat`. Stop any UART diagnostic or
+local service before starting the bridge:
 
 ```sh
 stty -F /dev/ttyS1 300 raw -echo -ixon -ixoff -crtscts \

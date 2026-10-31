@@ -1,5 +1,6 @@
 """Check patch write bounds and ROM invariants; no full-machine emulation."""
 import hashlib
+import math
 import os
 from pathlib import Path
 import sys
@@ -239,6 +240,27 @@ class OriginalRomTests(unittest.TestCase):
     def test_core_recognizes_output(self):
         crc = f'{zlib.crc32(self.patched):08X}'
         self.assertIn(f'x"{crc}"', (ROOT / "rtl" / "sys_bus.vhd").read_text())
+
+    def test_pitch_intervals_do_not_worsen(self):
+        original = self.original[0x66B:0x69B]
+        patched = self.patched[0x66B:0x69B]
+        self.assertEqual([i for i in range(48) if original[i] != patched[i]],
+                         [39, 47])
+
+        def period(value):
+            return 2 * (value & 0x7F) + (value >> 7)
+
+        for distance, target in ((1, 100), (2, 200),
+                                 (5, 1200 * math.log2(4 / 3)),
+                                 (7, 1200 * math.log2(3 / 2)),
+                                 (12, 1200), (24, 2400), (36, 3600)):
+            for i in range(48 - distance):
+                before = 1200 * math.log2(period(original[i + distance])
+                                          / period(original[i])) - target
+                after = 1200 * math.log2(period(patched[i + distance])
+                                         / period(patched[i])) - target
+                with self.subTest(distance=distance, index=i):
+                    self.assertLessEqual(abs(after), abs(before) + 1e-9)
 
     def test_reject_already_patched_rom(self):
         with self.assertRaises(ValueError):

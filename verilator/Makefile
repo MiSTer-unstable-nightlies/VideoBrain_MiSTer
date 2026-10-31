@@ -449,6 +449,14 @@ test-source-loader:
 
 test-apl-source: test-apl-input test-cpu-interrupt test-tools test-source-loader
 
+test-rtc-boot: check-res1-rom check-res2-rom $(GEN_V)
+	@mkdir -p out/rtc_boot
+	$(V) --binary --timing -Wno-fatal --top-module tb_rtc_boot \
+		--Mdir out/rtc_boot $(GEN_V) tests/tb_rtc_boot.sv
+	./out/rtc_boot/Vtb_rtc_boot +bios1="$(RES1_ROM)" +bios2="$(RES2_ROM)"
+
+.PHONY: test-rtc-boot
+
 .PHONY: test-apl-input test-apl-source test-music-input test-source-loader
 
 replay-clock-source: check-res1-rom check-res2-rom check-apl-rom headless

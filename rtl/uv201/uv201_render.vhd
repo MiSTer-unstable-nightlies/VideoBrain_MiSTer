@@ -67,7 +67,8 @@ ARCHITECTURE rtl OF uv201_render IS
   SIGNAL ce_pix_l : std_logic := '0';
   SIGNAL idx_l    : std_logic_vector(4 DOWNTO 0) := (OTHERS => '0');
   SIGNAL r_l, g_l, b_l : uv8 := (OTHERS => '0');
-  SIGNAL de_l, hs_l, vs_l, hb_l, vb_l : std_logic := '0';
+  SIGNAL de_l : std_logic := '0';
+  SIGNAL hs_l, vs_l, hb_l, vb_l : std_logic := '1';
   SIGNAL timing_live : std_logic;
 
 BEGIN

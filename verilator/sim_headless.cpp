@@ -398,7 +398,7 @@ static void usage(const char* argv0) {
 "  --source-trace       log generated keys and interpreter mode\n"
 "  --source-snoop FILE  passive CSV: keys, mode, RAM writes, I/O, scratch writes\n"
 "  --source-snoop-from N  start at loader payload position N (default 0)\n"
-"  --cart-type N        fallback profile for unknown dumps: 0 standard, 1 Timeshare, 2 Money Minder, 3 CompLang, 4 Infoman\n"
+"  --cart-type N        fallback profile: 0 standard, 1 Timeshare, 2 Money Minder, 3 CompLang, 4 Infoman, 5 4K RAM, 6 BASIC\n"
 "\n"
 "  --frames N           stop after N video frames (default 300)\n"
 "  --max-cycles N       hard cycle cap (default 2000000000)\n"

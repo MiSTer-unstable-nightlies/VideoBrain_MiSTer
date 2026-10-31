@@ -38,6 +38,30 @@ emu progressive(
     .VGA_HS(phs), .VGA_VS(pvs), .VGA_DE(pde), .CE_PIXEL(pce)
 );
 
+emu startup(.RESET(reset));
+reg [45:0] startup_bus = 0;
+reg startup_field = 0;
+initial begin
+    force startup.clk_sys = clk;
+    force startup.HPS_BUS = startup_bus;
+    force startup.vid_field = startup_field;
+    repeat (2) @(negedge clk);
+    startup_bus[34:33] = 2'b11;
+    startup_bus[31:16] = 16'h001e;
+    @(negedge clk);
+    startup_bus[31:16] = 0;
+    repeat (2) @(negedge clk);
+    startup_bus[31:16] = 16'h0400;
+    @(negedge clk);
+    startup_bus[34:33] = 0;
+    wait (!reset);
+    repeat (3) @(negedge clk);
+    if (startup.video_output != 0) $fatal(1, "Startup output changed before field boundary");
+    startup_field = 1;
+    repeat (3) @(negedge clk);
+    if (startup.video_output != 2) $fatal(1, "Saved 480p output was not restored");
+end
+
 // exercise top-level routing and measurement with native timing and rendering
 // board peripherals and unused scaler arithmetic are omitted with iverilog -i
 initial begin

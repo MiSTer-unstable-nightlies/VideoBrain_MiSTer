@@ -69,7 +69,7 @@ ARCHITECTURE rtl OF f8_busif IS
 
 FUNCTION classify(a : unsigned(13 DOWNTO 0); is_write : std_logic)
   RETURN bus_access_t IS
-  VARIABLE a_eff  : unsigned(13 DOWNTO 0) := cpu_addr_fold(a);
+  CONSTANT a_eff  : unsigned(13 DOWNTO 0) := cpu_addr_fold(a);
   VARIABLE result : bus_access_t := ACC_NONE;
 BEGIN
   IF (a_eff >= to_unsigned(ADDR_UV201_LO, 14)) AND

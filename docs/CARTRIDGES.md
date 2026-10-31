@@ -2,7 +2,7 @@
 
 All eighteen known cartridges are recognized. Current MiSTer coverage includes gameplay, APL/S programs, tape round trips and peripheral operations. Financier entry submission currently restarts the title. The table below lists recognized image sizes and slot devices. Information Manager exploration continues primarily to complete its manual. See [current accuracy and remaining work](ACCURACY.md).
 
-Known raw dumps are identified by CRC-32 and use the matching slot behavior. `--cart-type` and the OSD's System > Mapper Fallback setting apply only to unrecognized images: 0 standard, 1 Timeshare, 2 Money Minder, 3 CompLang, 4 Infoman. Assembled APL/S and Information Manager images are also identified automatically.
+Known raw dumps are identified by CRC-32 and use the matching slot behavior. `--cart-type` and the OSD's System > Mapper Fallback setting apply only to unrecognized images: 0 standard, 1 Timeshare, 2 Money Minder, 3 CompLang, 4 Infoman, 5 4K RAM, 6 BASIC. Assembled APL/S and Information Manager images are also identified automatically.
 
 For power cycle, Master Control, cartridge unloading and hot loading, see [reset behavior](RESET.md).
 
@@ -88,3 +88,31 @@ From MAME `bus/vidbrain/`. `/CS1` is 1000-17FF and `/CS2` is 1800-1FFF.
 | money_minder | 4K ROM | 4K ROM | 1K RAM at 3800, mirrored |
 | info_manager | 2K ROM | 1K RAM | ROM |
 | comp_language | 2K ROM, bank writes | ROM to 1BFF, RAM at 1C00 | banked ROM |
+
+## BASIC homebrew mapping
+
+The BASIC fallback is a new homebrew profile, not a historical cartridge.
+It combines the Timeshare framebuffer layout with expansion workspace:
+
+| CPU address | Storage |
+| --- | --- |
+| `1000-17FF` | Selected 2 KiB ROM bank, eight banks in a 16 KiB image |
+| `1800-1BFF` | 1 KiB cartridge RAM |
+| `1C00-1FFF` | Mirror of cartridge RAM |
+| `3000-3FFF` | 4 KiB workspace RAM |
+
+A CPU write to `17FF` selects the bank from data bits 2:0. Other ROM writes
+have no effect; reads of `17FF` return ROM data. Selection takes effect on
+the next access. CPU and video DMA see the same selected ROM bank; DMA
+reads cartridge RAM through both CS2 mirrors. Workspace RAM is CPU-only.
+
+Reset, power cycle, cartridge unload, and the first byte of a replacement
+download select bank zero. Reset preserves RAM. Power cycle clears internal
+and cartridge RAM; workspace RAM retains the existing 4K RAM profile's
+behavior and must be initialized by software. Known cartridge fingerprints
+take precedence over this fallback.
+
+Software reserves `1700-17FF` as identical common code/data in every bank,
+including bank-switch call and return stubs. This convention is enforced by
+image builders, not the mapper. Code that switches elsewhere must ensure
+the next instruction exists at the same address in the selected bank.

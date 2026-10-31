@@ -93,17 +93,18 @@ localparam CONF_STR = {
 	"P5O[37],Info. Manager Fix,Off,On;",
 	"P5-;",
 	"h9P5-,Printer Active;",
-	"h11P5-,Printer Busy;",
-	"h12P5-,Printer Error;",
+	"hBP5-,Printer Busy;",
+	"hCP5-,Printer Error;",
 	"P2,System;",
 	"P2-;",
 	"P2F0,BIN,Load BIOS;",
 	"P2F2,BIN,Load Expander 1 ROM;",
 	"P2-;",
-	"P2O[32],UART Output,Modem,Printer;",
-	"P2O[11:9],Mapper Fallback,Standard,Timeshare,Money Minder,APL/S,Info. Manager;",
-	"P2O[24],Reset on Cartridge Load,On,Off;",
 	"P2O[22],Info Messages,On,Off;",
+	"P2O[24],Reset on Load,On,Off;",
+	"P2O[44],BIOS Clock,Manual,Auto (RTC);",
+	"P2O[32],UART Output,Modem,Printer;",	
+	"P2O[11:9],Mapper Fallback,Standard,Timeshare,Money Minder,APL/S,Info. Manager,4K RAM,BASIC;",
 	"P2-;",
 	"P2T[27],Master Control (Soft Reset);",
 	"-;",
@@ -118,6 +119,9 @@ localparam CONF_STR = {
 
 wire   [1:0] buttons;
 wire [127:0] status;
+wire [64:0] RTC;
+wire [55:0] rtc_time;
+wire rtc_time_valid;
 wire joystick_connected = ~status[5];
 wire cart_loaded;
 wire  [10:0] ps2_key;
@@ -180,6 +184,7 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1), .VDNUM(3)) hps_io
 
 	.buttons(buttons),
 	.status(status),
+	.RTC(RTC),
 	.status_in(128'd0),
 	.status_set(1'b0),
 	.status_menumask(menu_mask),
@@ -229,7 +234,7 @@ wire pll_locked;
 pll pll
 (
 	.refclk(CLK_50M),
-	.rst(0),
+	.rst(1'b0),
 	.outclk_0(clk_sys),
 	.locked(pll_locked)
 );
@@ -483,7 +488,7 @@ always @(posedge clk_sys) begin
 				tape_info_frames <= 0;
 			end else if (joy_calibrating || (tape_busy && !tape_error)) begin
 				if (tape_info_frames == 59) begin
-					info <= joy_calibrating ? 9 : 5;
+					info <= joy_calibrating ? 8'd9 : 8'd5;
 					info_req <= 1;
 					tape_info_frames <= 0;
 				end else tape_info_frames <= tape_info_frames + 1'b1;
@@ -504,10 +509,24 @@ end
 
 reg [1:0] video_output = 0, requested_output = 0;
 reg apply_video_d = 0, apply_video_pending = 0;
+reg [2:0] startup_status_word = 0;
+reg startup_status_cmd = 0, startup_video_received = 0, startup_video_applied = 0;
+reg [1:0] startup_video_output = 0;
 wire progressive = video_output != 0;
 wire linedouble = video_output == 2;
 reg field_d = 0;
 always @(posedge clk_sys) begin
+	if (!HPS_BUS[34]) begin
+		startup_status_word <= 0;
+		startup_status_cmd <= 0;
+	end else if (HPS_BUS[33] && !startup_video_received) begin
+		if (startup_status_word == 0) startup_status_cmd <= HPS_BUS[31:16] == 16'h001e;
+		if (startup_status_word == 3 && startup_status_cmd) begin
+			startup_video_output <= HPS_BUS[26:25] == 3 ? 2'd0 : HPS_BUS[26:25];
+			startup_video_received <= 1;
+		end
+		if (startup_status_word != 7) startup_status_word <= startup_status_word + 1'b1;
+	end
 	field_d <= vid_field;
 	apply_video_d <= status[43];
 	if (RESET) begin
@@ -515,6 +534,11 @@ always @(posedge clk_sys) begin
 		requested_output <= 0;
 		apply_video_pending <= 0;
 	end else begin
+		if (startup_video_received && !startup_video_applied) begin
+			requested_output <= startup_video_output;
+			apply_video_pending <= 1;
+			startup_video_applied <= 1;
+		end
 		if (vid_field != field_d && apply_video_pending) begin
 			video_output <= requested_output;
 			apply_video_pending <= 0;
@@ -543,6 +567,9 @@ apl_source_loader source_loader (
 	.auto_repeat(status[19]),
 	.enabled(source_enabled),
 	.cancel(|kbd_matrix),
+	.rtc(RTC),
+	.rtc_time(rtc_time),
+	.rtc_time_valid(rtc_time_valid),
 	.busy(source_busy),
 	.started(source_started),
 	.complete(source_complete),
@@ -580,6 +607,9 @@ videobrain_core core
 	.clk        (clk_sys),
 	.reset_na   (~reset),
 	.power_cycle(power_cycle),
+	.rtc_clock_enable(status[44]),
+	.rtc_time_valid(rtc_time_valid),
+	.rtc_time(rtc_time),
 	.timing_reset_na(~system_reset),
 	.progressive(progressive),
 

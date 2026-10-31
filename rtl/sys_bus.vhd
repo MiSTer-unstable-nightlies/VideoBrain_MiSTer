@@ -13,6 +13,9 @@ ENTITY sys_bus IS
     reset_na : IN  std_logic;
     power_cycle : IN std_logic := '0';
     power_busy : OUT std_logic := '0';
+    clock_seed_we : IN std_logic := '0';
+    clock_seed_addr : IN unsigned(9 DOWNTO 0) := (OTHERS => '0');
+    clock_seed_data : IN uv8 := (OTHERS => '0');
 
     ext_addr  : IN  unsigned(13 DOWNTO 0);
     ext_rd    : IN  std_logic;
@@ -83,7 +86,7 @@ ARCHITECTURE rtl OF sys_bus IS
   END FUNCTION;
 
   FUNCTION is_standard_cart(crc : uv32; size : unsigned) RETURN boolean IS
-    VARIABLE hash : uv32 := NOT crc;
+    CONSTANT hash : uv32 := NOT crc;
   BEGIN
     IF size = to_unsigned(16#0800#, size'length) THEN
       RETURN hash = CART_CRC_MUSICTEACHER1 OR
@@ -146,6 +149,10 @@ ARCHITECTURE rtl OF sys_bus IS
   SIGNAL cart_ram_we : std_logic;
   SIGNAL cart_ram_rd : std_logic;
 
+  TYPE exp_ram_t IS ARRAY (0 TO 4095) OF uv8;
+  SIGNAL exp_ram : exp_ram_t := (OTHERS => (OTHERS => '0'));
+  SIGNAL exp_ram_sel, exp_ram_we : std_logic;
+
   TYPE ram_t IS ARRAY (0 TO 1023) OF uv8;
   SIGNAL sys_ram : ram_t := (OTHERS => (OTHERS => '0'));
   SIGNAL sys_ram_we : std_logic;
@@ -163,19 +170,15 @@ ARCHITECTURE rtl OF sys_bus IS
   SIGNAL cart_cpu_rdata : uv8;
   SIGNAL cart_cpu_sel : std_logic;
 
-  SIGNAL bb_res2_sel   : std_logic;
   SIGNAL bb_res2_addr  : unsigned(10 DOWNTO 0);
   SIGNAL bb_res2_rdata : uv8;
-  SIGNAL bb_ram_sel    : std_logic;
   SIGNAL bb_ram_addr   : unsigned(9 DOWNTO 0);
   SIGNAL bb_ram_rdata  : uv8;
-  SIGNAL bb_cart_sel   : std_logic;
   SIGNAL bb_cart_addr  : unsigned(11 DOWNTO 0);
   SIGNAL bb_cart_rdata : uv8;
   SIGNAL bb_cart_rom_rdata : uv8;
   SIGNAL bb_cart_ram_rdata : uv8;
   SIGNAL bb_cart_ram_sel : std_logic;
-  SIGNAL bb_open_bus   : std_logic;
 
   SIGNAL dl_res1, dl_res2, dl_cart : std_logic;
   SIGNAL cs1, cs2, exp : std_logic;
@@ -192,6 +195,8 @@ ARCHITECTURE rtl OF sys_bus IS
   SIGNAL cart_a   : unsigned(11 DOWNTO 0);
   SIGNAL cart_cpu_a : unsigned(13 DOWNTO 0);
   SIGNAL cart_bank : natural RANGE 0 TO 2 := 0;
+  SIGNAL basic_bank : unsigned(2 DOWNTO 0) := (OTHERS => '0');
+  SIGNAL bb_cart_rom_a : unsigned(13 DOWNTO 0);
   SIGNAL cart_exp_rom : std_logic;
 
 BEGIN
@@ -223,7 +228,7 @@ BEGIN
     (NOT cart_crc = CART_CRC_MUSICTEACHER1 OR NOT cart_crc = x"F4390144" OR
      NOT cart_crc = x"3BE4D855" OR NOT cart_crc = x"7A568961" OR
      NOT cart_crc = x"9E59066B" OR NOT cart_crc = x"7CFE495D" OR
-     NOT cart_crc = x"99CC38F2") ELSE '0';
+     NOT cart_crc = x"99CC38F2" OR NOT cart_crc = x"6FD7A98B") ELSE '0';
   -- bank d input loop: release verified at 3c14, new key accepted at 3c20
   apl_key_accepted <= '1' WHEN reset_na = '1' AND
     ext_rd = '1' AND ext_fetch = '1' AND
@@ -241,13 +246,15 @@ BEGIN
         IF ext_rd = '1' AND ext_fetch = '1' THEN
           IF ext_addr = x"14D8" OR ext_addr = x"158F" OR
              ((NOT cart_crc = x"7A568961" OR NOT cart_crc = x"9E59066B" OR
-               NOT cart_crc = x"7CFE495D" OR NOT cart_crc = x"99CC38F2") AND
+               NOT cart_crc = x"7CFE495D" OR NOT cart_crc = x"99CC38F2" OR
+               NOT cart_crc = x"6FD7A98B") AND
               ext_addr = x"13B5") THEN
             apl_input_ready <= '1';
           ELSIF ext_addr = x"10A1" OR ext_addr = x"1154" OR
                 ext_addr = x"14C8" OR ext_addr = x"14E4" OR
                 ((NOT cart_crc = x"7A568961" OR NOT cart_crc = x"9E59066B" OR
-                  NOT cart_crc = x"7CFE495D" OR NOT cart_crc = x"99CC38F2") AND
+                  NOT cart_crc = x"7CFE495D" OR NOT cart_crc = x"99CC38F2" OR
+                  NOT cart_crc = x"6FD7A98B") AND
                  ext_addr = x"13C0") THEN
             apl_input_ready <= '0';
           END IF;
@@ -306,10 +313,11 @@ BEGIN
                                a_eff <= to_unsigned(ADDR_UV201_HI, 14) ELSE '0';
   uv_reg_wdata <= bus_wdata;
 
-  sys_ram_we <= bus_wr AND to_std_logic(a_eff >= to_unsigned(ADDR_RAM_LO, 14) AND
-                                      a_eff <= to_unsigned(ADDR_RAM_HI, 14));
-  sys_ram_wa <= a_eff(9 DOWNTO 0);
-  sys_ram_wdata <= bus_wdata;
+  sys_ram_we <= clock_seed_we OR (bus_wr AND
+    to_std_logic(a_eff >= to_unsigned(ADDR_RAM_LO, 14) AND
+                 a_eff <= to_unsigned(ADDR_RAM_HI, 14)));
+  sys_ram_wa <= clock_seed_addr WHEN clock_seed_we = '1' ELSE a_eff(9 DOWNTO 0);
+  sys_ram_wdata <= clock_seed_data WHEN clock_seed_we = '1' ELSE bus_wdata;
 
   PROCESS (clk, reset_na) IS
   BEGIN
@@ -361,7 +369,9 @@ BEGIN
         rdata_l <= res2_rom(to_integer(a_eff - to_unsigned(ADDR_RES2_LO, 14)));
 
       ELSIF a_eff >= to_unsigned(ADDR_EXP_LO, 14) THEN
-        IF cart_ram_rd = '1' THEN
+        IF exp_ram_sel = '1' THEN
+          rdata_l <= exp_ram(to_integer(a_eff(11 DOWNTO 0)));
+        ELSIF cart_ram_rd = '1' THEN
           rdata_l <= cart_ram(to_integer(cart_ram_a));
         ELSIF cart_exp_rom = '1' THEN
           cart_cpu_sel <= '1';
@@ -380,10 +390,13 @@ BEGIN
   BEGIN
     IF rising_edge(clk) THEN
       cart_cpu_rdata <= cart_rom(to_integer(cart_cpu_a));
-      bb_cart_rom_rdata <= cart_rom(to_integer(bb_cart_addr AND
-                                              (cart_big & "11111111111")));
+      bb_cart_rom_rdata <= cart_rom(to_integer(bb_cart_rom_a));
     END IF;
   END PROCESS;
+
+  bb_cart_rom_a <= basic_bank & bb_cart_addr(10 DOWNTO 0)
+    WHEN cart_effective_type = CART_BASIC ELSE
+    resize(bb_cart_addr AND (cart_big & "11111111111"), 14);
 
   ext_rdata <= cart_cpu_rdata WHEN cart_cpu_sel = '1' ELSE rdata_l;
   bb_cart_rdata <= (OTHERS => '1') WHEN cart_loaded_l = '0' ELSE
@@ -548,16 +561,16 @@ BEGIN
     PORT MAP (
       bb_addr     => bb_addr,
       bb_rdata    => bb_rdata,
-      res2_sel    => bb_res2_sel,
+      res2_sel    => OPEN,
       res2_addr   => bb_res2_addr,
       res2_rdata  => bb_res2_rdata,
-      ram_sel     => bb_ram_sel,
+      ram_sel     => OPEN,
       ram_addr    => bb_ram_addr,
       ram_rdata   => bb_ram_rdata,
-      cart_sel    => bb_cart_sel,
+      cart_sel    => OPEN,
       cart_addr   => bb_cart_addr,
       cart_rdata  => bb_cart_rdata,
-      open_bus    => bb_open_bus
+      open_bus    => OPEN
       );
 
   PROCESS (clk) IS
@@ -568,7 +581,8 @@ BEGIN
       bb_cart_ram_rdata <= cart_ram(to_integer(bb_cart_addr(9 DOWNTO 0)));
       IF (cart_effective_type = CART_COMPLANG AND bb_cart_addr >= x"C00") OR
          (cart_effective_type = CART_INFOMAN AND bb_cart_addr(11) = '1') OR
-         (cart_effective_type = CART_TIMESHARE AND bb_cart_addr(11) = '1') THEN
+         ((cart_effective_type = CART_TIMESHARE OR cart_effective_type = CART_BASIC) AND
+          bb_cart_addr(11) = '1') THEN
         bb_cart_ram_sel <= '1';
       ELSE
         bb_cart_ram_sel <= '0';
@@ -585,11 +599,13 @@ BEGIN
   exp <= cart_loaded_l AND to_std_logic(a_eff >= to_unsigned(ADDR_EXP_LO, 14));
 
   cart_a <= resize(a_eff(11 DOWNTO 0), 12) AND (cart_big & "11111111111");
-  PROCESS (a_eff, cart_a, cart_effective_type, cs1, exp, cart_bank) IS
+  PROCESS (a_eff, cart_a, cart_effective_type, cs1, exp, cart_bank, basic_bank) IS
     VARIABLE chip : natural RANGE 0 TO 6;
   BEGIN
     cart_cpu_a <= resize(cart_a, 14);
-    IF cart_effective_type = CART_TIMESHARE OR cart_effective_type = CART_INFOMAN THEN
+    IF cart_effective_type = CART_BASIC THEN
+      cart_cpu_a <= basic_bank & a_eff(10 DOWNTO 0);
+    ELSIF cart_effective_type = CART_TIMESHARE OR cart_effective_type = CART_INFOMAN THEN
       IF cs1 = '1' THEN
         cart_cpu_a <= resize(a_eff(10 DOWNTO 0), 14);
       ELSIF exp = '1' AND cart_effective_type = CART_INFOMAN THEN
@@ -626,13 +642,40 @@ BEGIN
     END IF;
   END PROCESS;
 
+  PROCESS (clk) IS
+  BEGIN
+    IF rising_edge(clk) THEN
+      IF reset_na = '0' OR cart_unload = '1' OR power_cycle = '1' OR
+         (dl_cart = '1' AND dl_addr = x"0000") THEN
+        basic_bank <= (OTHERS => '0');
+      ELSIF ext_wr = '1' AND cart_loaded_l = '1' AND
+            cart_effective_type = CART_BASIC AND a_eff = 16#17FF# THEN
+        basic_bank <= ext_wdata(2 DOWNTO 0);
+      END IF;
+    END IF;
+  END PROCESS;
+
   cart_exp_rom <= exp AND to_std_logic(cart_effective_type = CART_COMPLANG OR
                                       cart_effective_type = CART_INFOMAN);
 
   cart_ram_rd <= (cs2 AND to_std_logic(cart_effective_type = CART_TIMESHARE)) OR
+                 (cs2 AND to_std_logic(cart_effective_type = CART_BASIC)) OR
                  (cs2 AND to_std_logic(cart_effective_type = CART_INFOMAN)) OR
                  (cs2 AND a_eff(10) AND to_std_logic(cart_effective_type = CART_COMPLANG)) OR
                  (exp AND a_eff(11) AND to_std_logic(cart_effective_type = CART_MONEYMINDER));
   cart_ram_a  <= a_eff(9 DOWNTO 0);
+
+  exp_ram_sel <= exp AND
+    to_std_logic(cart_effective_type = CART_EXP_RAM OR cart_effective_type = CART_BASIC);
+  exp_ram_we <= bus_wr AND exp_ram_sel;
+
+  PROCESS (clk) IS
+  BEGIN
+    IF rising_edge(clk) THEN
+      IF reset_na = '1' AND exp_ram_we = '1' THEN
+        exp_ram(to_integer(a_eff(11 DOWNTO 0))) <= bus_wdata;
+      END IF;
+    END IF;
+  END PROCESS;
 
 END ARCHITECTURE rtl;

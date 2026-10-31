@@ -1,0 +1,2 @@
+R=1.4 1.7 .9
+{MUL}/R*{DIV}SIZE R

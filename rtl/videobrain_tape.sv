@@ -30,7 +30,7 @@ module videobrain_tape #(
 );
 
 localparam IDLE = 0, RECORD = 1, FLUSH = 2, PLAY = 3;
-localparam HEADER = 0, INVALIDATE = 1, WRITE_DATA = 2, COMMIT = 3, READ_DATA = 4;
+localparam [2:0] HEADER = 0, INVALIDATE = 1, WRITE_DATA = 2, COMMIT = 3, READ_DATA = 4;
 localparam [31:0] MAGIC = 32'h31544256; // vbt1
 reg [1:0] mode = IDLE, io_state = 0;
 reg [2:0] operation = HEADER;

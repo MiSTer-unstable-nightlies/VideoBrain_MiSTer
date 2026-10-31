@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Create an experimental static-staff Music Teacher 1 ED01 cartridge.
+"""Create the experimental Music Teacher 1 Better Playback 0.5 cartridge.
 
-Keep pitch decoding, sound, recording and rest timing intact.
+Correct G#2 and C2 tuning; keep sound, recording and rest timing intact.
 Suppress staff glyphs and clear the five-row note-name strip at page wrap.
 Poll Program 1 keys directly and service video only when the BIOS is ready.
 """
@@ -69,6 +69,9 @@ PATCHES = (
      "20 30 f5 84 1a 13 13 91 03 16 16 20 80 8b 58 20 ff 8e 48 17 16 "
      "20 c0 8b 58 20 ff 8e 48 17 28 40 bc 0c", BANK_SCAN),
     (0x1585, "28 43 61", "28 13 ca"),
+    # preserve interval tuning rather than rounding each pitch toward A440
+    (0x1692, "cc", "4c"),  # G#2: match the upper octaves
+    (0x169A, "f9", "f8"),  # C2: improve octaves, fifths and fourths
 )
 
 

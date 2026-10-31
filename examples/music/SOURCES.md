@@ -2,7 +2,8 @@
 
 These files reduce the cited scores to one melodic line for Music Teacher 1.
 The matching `.mml` files are the editable sources; `.vbk` files use score
-timing. See [playback and regeneration](README.md).
+timing, with acknowledged score timing for Flight of the Bumblebee.
+See [playback and regeneration](README.md).
 
 ## Bach: Cello Suite No. 1, Prelude (BWV 1007)
 
@@ -47,6 +48,23 @@ score's Repeat 8va instruction, returning down for the A pickup.
 Source: [Mutopia's reproduction of the 1902 edition](https://www.mutopiaproject.org/ftp/JoplinS/entertainer/),
 typeset by Chris Sawer and revised by Simon Albrecht, public domain.
 Pitches and durations were checked against its LilyPond source and MIDI.
+
+## Rimsky-Korsakov: Flight of the Bumblebee
+
+`rimsky-korsakov-flight-of-the-bumblebee` follows the running sixteenth-note
+line between hands, omitting accompaniment and chord doublings. It contains
+872 notes across 113 performed measures, including the repeat at measures
+75-85 and its first and second endings. The melody is lowered 15 semitones,
+from A minor to F# minor. The first-ending flourish at measure 85a is lowered
+one further octave; the opening bass note of measure 92 is raised one octave.
+The resulting range is C2-F#5. C2 occurs eight times and G#2 fourteen times.
+
+Source: [Noctave's CC0 piano reduction](https://noctavepiano.com/en/sheet-music/rimski-vol-du-bourdon/),
+based on the [2017 MuseScore transcription](https://musescore.com/user/23708136/scores/4413561).
+Pitches, durations, hand changes and repeats were checked against the MusicXML.
+The arrangement retains quarter note = 144; dynamics and articulation are
+omitted. This MML arrangement and its VBK are dedicated to the public domain
+under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 ## Strauss: The Blue Danube Waltz, Op. 314, main theme
 

@@ -56,6 +56,8 @@ Long full-machine checks remain separate: `test-apl-reload`,
 separately supplied recording. The master suite lists these exclusions.
 Original-machine measurements and MiSTer acceptance tests remain separate.
 
+`make test-rtc-boot` checks optional RTC clock initialization against the original BIOS, including reset reseeding, disabled/missing and late RTC, and midnight rollover. Supply RES1 and RES2 ROMs. MiSTer verification remains separate.
+
 `make test-video` checks native and progressive timing, staged output selection and application, and uncropped 480p line duplication. It compares pixels, sync and blanking against the source and checks the 189 by 484 active area within the 526-line output raster. The top-level routing test substitutes a passthrough mixer; hardware output still requires MiSTer validation.
 
 `make test-cpu-branches` runs ROM-free GHDL checks for BR7 across all 64 ISAR values and every BT/BF mask across all 32 status-register values, including directly loaded zero/sign combinations. The 4,160 cases use signed displacement boundaries, check branch destinations and operand/fetch cycle lengths, and verify that ISAR or status flags remain unchanged.

@@ -123,7 +123,7 @@ For printer output, select System > UART Output > Printer and use the [Linux fil
 
 ## Video
 
-Select Video > Output, then Apply Video Output. 480i (Original) preserves native timing. 240p uses progressive timing; 480p doubles each progressive line without cropping. Output changes take effect at a field boundary.
+Select Video > Output, then Apply Video Output. 480i (Original) preserves native timing. 240p uses progressive timing; 480p doubles each progressive line without cropping. Both progressive modes have slightly degraded audio timing. Output changes take effect at a field boundary.
 
 ## Tools
 

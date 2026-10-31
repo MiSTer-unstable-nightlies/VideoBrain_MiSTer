@@ -29,6 +29,7 @@ PRINTED_SYMBOLS = {k: v for k, v in SYMBOLS.items()
                    if k not in (",", "\u00af", "{NEG}")}
 PRINTED_SYMBOLS.update({"%": 28, "\u00a2": 2, "{CENT}": 2})
 LOWER = dict(LETTERS, **{",": 7, ";": 3})
+TINYBASIC_SYMBOLS = {",": 14, "@": 2}
 FUNCTIONS = {name: bit for name, bit in KEYS.items() if len(name) > 1}
 BASE_NOTES = [34, 30, 35, 26, 31, 27, 18, 23, 14, 15, 10, 32,
               29, 20, 25, 16, 21, 17, 8, 13, 4, 9, 0, 5, 6, 2, 3]
@@ -36,6 +37,7 @@ FIELD_HZ = Fraction(14318181, 228 * 4) / Fraction(525, 2)
 MUSIC_REPLAY = 0xfd
 MUSIC_RECORD = 0xfe
 MUSIC_BANKS = {-12: 0xfa, 0: 0xfb, 12: 0xfc}
+RTC_INSERT = 0xf7
 MODE_LETTERS = 0xf8
 MODE_SYMBOLS = 0xf9
 
@@ -71,18 +73,20 @@ def encode(text, hold_final=False):
     return b"VBK1" + struct.pack("<HH", len(keys), binascii.crc_hqx(keys, 0xffff)) + keys
 
 
-def packet(events):
+def packet(events, rtc=False):
     payload = bytearray()
     for key, hold, gap in events:
-        if key not in range(36) and key not in (MODE_LETTERS, MODE_SYMBOLS,
-                                              *MUSIC_BANKS.values(), MUSIC_REPLAY, MUSIC_RECORD, 255):
+        if (key not in range(36) and
+                key not in (MODE_LETTERS, MODE_SYMBOLS, *MUSIC_BANKS.values(),
+                            MUSIC_REPLAY, MUSIC_RECORD, 255) and
+                not (rtc and key == RTC_INSERT)):
             raise ValueError("event must be a matrix key, mode control, music control or WAIT")
         if not 1 <= hold <= 255 or not 0 <= gap <= 255:
             raise ValueError("hold must be 1..255 fields; gap must be 0..255")
         payload.extend((key, hold, gap))
     if not payload or len(payload) > 4096:
         raise ValueError("input must contain 1..1365 timed events")
-    return b"VBK2" + struct.pack("<HH", len(payload), binascii.crc_hqx(payload, 0xffff)) + payload
+    return (b"VBK3" if rtc else b"VBK2") + struct.pack("<HH", len(payload), binascii.crc_hqx(payload, 0xffff)) + payload
 
 
 def wait(events, fields):
@@ -96,6 +100,8 @@ def wait(events, fields):
 
 def physical_keys(text):
     events = []
+    rtc = False
+    controls = KEYS | {"LETTERS": MODE_LETTERS, "SYMBOLS": MODE_SYMBOLS, "RTC": RTC_INSERT}
     for line_no, line in enumerate(text.splitlines(), 1):
         parts = line.upper().split()
         if not parts:
@@ -103,14 +109,15 @@ def physical_keys(text):
         try:
             if parts[0] == "WAIT" and len(parts) == 2:
                 wait(events, int(parts[1]))
-            elif parts[0] in KEYS and len(parts) in (1, 3):
+            elif parts[0] in controls and len(parts) in (1, 3):
                 hold, gap = (8, 8) if len(parts) == 1 else map(int, parts[1:])
-                events.append((KEYS[parts[0]], hold, gap))
+                events.append((controls[parts[0]], hold, gap))
+                rtc |= parts[0] == "RTC"
             else:
-                raise ValueError("expected KEY [hold gap] or WAIT fields")
+                raise ValueError("expected KEY [hold gap], RTC [hold gap] or WAIT fields")
         except ValueError as error:
             raise ValueError(f"line {line_no}: {error}") from error
-    return packet(events)
+    return packet(events, rtc=rtc)
 
 
 def keyboard_text(text, start_mode, profile="keyboard", hold_final=False):
@@ -127,6 +134,8 @@ def keyboard_text(text, start_mode, profile="keyboard", hold_final=False):
             desired = None
             if char == " ":
                 key = 19
+            elif profile == "tinybasic" and char in TINYBASIC_SYMBOLS:
+                key, desired = TINYBASIC_SYMBOLS[char], True
             elif char in LOWER:
                 key, desired = LOWER[char], False
             elif char.isascii() and char.upper() in LOWER:
@@ -298,7 +307,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path, nargs="?")
-    parser.add_argument("--profile", choices=("apl", "keyboard", "text", "keys", "music"), default="apl",
+    parser.add_argument("--profile", choices=("apl", "keyboard", "text", "tinybasic", "keys", "music"), default="apl",
                         help="input profile (music range: C2..B5)")
     parser.add_argument("--start-mode", choices=("letters", "symbols"))
     parser.add_argument("--hold-final", action="store_true", help="omit the final NEXT; earlier lines still submit")
