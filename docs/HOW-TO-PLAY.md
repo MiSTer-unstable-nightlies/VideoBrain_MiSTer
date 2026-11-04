@@ -196,7 +196,7 @@ Enter the level and number of stands at the opening prompts. For each day's deci
 
 ### Pinball
 
-Enter a game number, then Space (RUN/STOP); games 1-4 are the basic game for one to four players. **Joystick 1's HIT button is the left flipper; joystick 2's is the right flipper.** Joystick 1's button also starts a ball. Select **Joysticks > Paired Sticks > 1+2 / 3+4** to use controller 1's Fire and Fire (Paired) for the two flippers (manual p. 5).
+Enter a game number, then Space (RUN/STOP); games 1-4 are the basic game for one to four players. **Joystick 1's HIT button is the left flipper; joystick 2's is the right flipper.** Joystick 1's button also starts a ball. Select **Joysticks > Paired Sticks > 1+2 / 3+4 (Pinball)** to use controller 1's Fire and Fire (Paired) for the two flippers (manual p. 5).
 
 ![Pinball flipper controls](../images/controls/pinball-controls.jpg)
 

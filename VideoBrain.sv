@@ -27,7 +27,7 @@ assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
-assign VGA_F1 = progressive ? 1'b0 : vid_field;
+assign VGA_F1 = output_mode != 0 ? 1'b0 : video_field;
 assign VGA_SCALER  = 0;
 assign VGA_DISABLE = 0;
 assign HDMI_FREEZE = 0;
@@ -47,23 +47,33 @@ wire [1:0] ar = status[122:121];
 `include "build_id.v"
 localparam CONF_STR = {
 	"VideoBrain;UART300:110;",
-	"F1,BIN,Load Cartridge;",
+
+	// === CARTRIDGE ===
+	"F1,BINVBC,Load Cartridge;",
 	"-;",
+
+	// === TAPE ===
 	"d8S0,VBT,Mount Playback Tape;",
 	"T[23],Rewind Playback Tape;",
 	"d8S1,VBT,Mount Record Tape;",
+	"d8T[46],New Record Tape;",
 	"T[30],Rewind Record Tape;",
 	"-;",
+
+	// === KEYBOARD ===
 	"P4,Keyboard;",
 	"P4-;",
 	"P4F4,VBK,Load Keyboard File;",
 	"P4-;",
 	"P4O[31],OSD Aborts VBK,On,Off;",
+	"P4-;",
 	"H5P4O[18],Music Mode,Playback,Record;",
 	"h5D5P4O[18],Music Mode,Playback;",
 	"P4O[19],Music Repeat,Off,On;",
 	"P4-;",
 	"P4O[29],Esc Soft Reset,On,Off;",
+
+	// === JOYSTICKS ===
 	"P3,Joysticks;",
 	"P3-;",
 	"P3O[5],Joysticks,Connected,Disconnected;",
@@ -73,17 +83,13 @@ localparam CONF_STR = {
 	"D4P3O[38],Analog Mode,Absolute,Relative;",
 	"DDP3O[40:39],Relative Speed,Slow,Normal,Fast;",
 	"P3-;",
-	"D4P3O[17:16],Paired Sticks,Off,1+2 / 3+4,1+3 / 2+4 (Doubles);",
-	"P1,Video;",
-	"P1-;",
-	"P1O[42:41],Output,480i (Original),240p,480p;",
-	"P1T[43],Apply Video Output;",
-	"P1-;",
-	"P1O[122:121],Aspect Ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"P1O[125:123],Scale,Normal,V-Integer,HV-Integer-,HV-Integer+,HV-Integer;",
+	"D4P3O[17:16],Paired Sticks,Off,1+2 / 3+4 (Pinball),1+3 / 2+4 (Doubles);",
+
+	// === PRINTER ===
 	"P5,Printer;",
 	"P5-;",
 	"d6P5S2,VBP,Mount Capture Image;",
+	"d6P5T[47],New Capture Image;",
 	"P5O[33],Capture Baud,300,110;",
 	"P5-;",
 	"d7P5T[34],Start Capture;",
@@ -95,6 +101,19 @@ localparam CONF_STR = {
 	"h9P5-,Printer Active;",
 	"hBP5-,Printer Busy;",
 	"hCP5-,Printer Error;",
+
+	// === VIDEO ===
+	"P1,Video;",
+	"P1-;",
+	"P1O[42:41],Output,480i (Original),240p,480p;",
+	"P1T[43],Apply Video Output;",
+	"P1-;",
+	"P1O[45],Colors,16 (Original),32 (Patent);",
+	"P1-;",
+	"P1O[122:121],Aspect Ratio,Original,Full Screen,[ARC1],[ARC2];",
+	"P1O[125:123],Scale,Normal,V-Integer,HV-Integer-,HV-Integer+,HV-Integer;",	
+
+	// === SYSTEM ===
 	"P2,System;",
 	"P2-;",
 	"P2F0,BIN,Load BIOS;",
@@ -109,10 +128,16 @@ localparam CONF_STR = {
 	"P2T[27],Master Control (Soft Reset);",
 	"-;",
 	"DAR[28],Unload Cartridge;",
+
+	// === RESET ===
 	"R[0],Reset;",
+
+	// === CONTROLS ===
 	"J,Fire,Fire (Paired);",
 	"jn,A,B;",
-	"I,Keyboard entry started,Bad keyboard file,Tape error,Tape rewound,Tape busy,Tape idle,Keyboard entry finished,Keyboard entry aborted,Calibrating sticks,End of tape,Printer no image,Printer scanning,Printer ready,Printer starting,Printer active,Printer flushing,Printer stalled,Printer full,Printer error,Printer read only,Printer bad image,Printer incomplete image,Printer storage error,Printer framing error,Printer overflow,Printer media changed,Printer reset interrupted;",
+
+	// === INFO MESSAGES ===
+	"I,Keyboard entry started,Bad keyboard file,Tape error,Tape rewound,Tape busy,Tape idle,Keyboard entry finished,Keyboard entry aborted,Calibrating sticks,End of tape,Printer no image,Printer scanning,Printer ready,Printer starting,Printer active,Printer flushing,Printer stalled,Printer full,Printer error,Printer read only,Printer bad image,Printer incomplete image,Printer storage error,Printer framing error,Printer overflow,Printer media changed,Printer reset interrupted,Invalid or unsupported cartridge;",
 	"v,1;",
 	"V,v",`BUILD_DATE
 };
@@ -124,6 +149,7 @@ wire [55:0] rtc_time;
 wire rtc_time_valid;
 wire joystick_connected = ~status[5];
 wire cart_loaded;
+wire cart_load_error;
 wire  [10:0] ps2_key;
 wire  [31:0] joystick_0, joystick_1, joystick_2, joystick_3;
 wire [15:0] joystick_l_analog_0, joystick_l_analog_1;
@@ -226,7 +252,7 @@ hps_io #(.CONF_STR(CONF_STR), .CONF_STR_BRAM(1), .VDNUM(3)) hps_io
 );
 
 
-wire clk_sys;
+wire clk_sys, clk_video, video_ready;
 wire expander_modem_rxd, expander_modem_txd, expander_printer_txd;
 assign UART_TXD = status[32] ? expander_printer_txd : expander_modem_txd;
 assign expander_modem_rxd = status[32] ? 1'b1 : UART_RXD;
@@ -234,13 +260,17 @@ wire pll_locked;
 pll pll
 (
 	.refclk(CLK_50M),
-	.rst(1'b0),
+	.rst(RESET),
+	.progressive(video_output != 0),
 	.outclk_0(clk_sys),
+	.outclk_1(),
+	.outclk_2(clk_video),
+	.video_ready(video_ready),
 	.locked(pll_locked)
 );
 
 reg master_control = 0;
-wire cart_dl = ioctl_download && (ioctl_index[7:0] == 8'd1);
+wire cart_dl = ioctl_download && (ioctl_index[5:0] == 6'd1);
 // vbk downloads must not reset the machine
 wire system_reset = RESET | status[0] | status[28] | buttons[1] |
                     (ioctl_download && (ioctl_index[7:0] != 8'd4) &&
@@ -261,6 +291,7 @@ wire apl_symbols, source_busy, source_error, source_started, source_complete, so
 wire source_enabled = !OSD_STATUS || (status[31] && source_started);
 wire source_music_playback = !status[18] || status[19];
 wire apl_input_ready, apl_key_accepted;
+wire tiny_available, tiny_input_ready, tiny_key_accepted;
 wire [35:0] source_keys;
 wire expander_dl = ioctl_download && ((ioctl_index == 16'd64) ||
                                     (ioctl_index[7:0] == 8'd2));
@@ -437,6 +468,7 @@ always @(posedge clk_sys) source_vs_d <= vid_vs;
 reg source_started_d = 0, source_complete_d = 0, source_error_d = 0;
 reg source_aborted_d = 0, joy_calibrating_d = 0;
 reg tape_busy_d = 0, tape_error_d = 0;
+reg cart_load_error_d = 0;
 reg [3:0] printer_status_d = 0, printer_error_d = 0;
 reg printer_notice_error = 0;
 reg [7:0] printer_notice = 0;
@@ -467,6 +499,7 @@ always @(posedge clk_sys) begin
 	joy_calibrating_d <= joy_calibrating;
 	tape_busy_d <= tape_busy;
 	tape_error_d <= tape_error;
+	cart_load_error_d <= cart_load_error;
 	info_req <= 0;
 	if (reset || status[22]) begin
 		pending_info <= 0;
@@ -504,6 +537,7 @@ always @(posedge clk_sys) begin
 		if (tape_rewound) pending_info <= 4;
 		if (source_error && !source_error_d) pending_info <= 2;
 		if (tape_error && !tape_error_d) pending_info <= 3;
+		if (cart_load_error && !cart_load_error_d) pending_info <= 28;
 	end
 end
 
@@ -512,8 +546,6 @@ reg apply_video_d = 0, apply_video_pending = 0;
 reg [2:0] startup_status_word = 0;
 reg startup_status_cmd = 0, startup_video_received = 0, startup_video_applied = 0;
 reg [1:0] startup_video_output = 0;
-wire progressive = video_output != 0;
-wire linedouble = video_output == 2;
 reg field_d = 0;
 always @(posedge clk_sys) begin
 	if (!HPS_BUS[34]) begin
@@ -559,6 +591,9 @@ apl_source_loader source_loader (
 	.addr(ioctl_addr),
 	.data(ioctl_dout),
 	.available(apl_available),
+	.tiny_available(tiny_available),
+	.tiny_input_ready(tiny_input_ready),
+	.tiny_key_accepted(tiny_key_accepted),
 	.music_available(music_available),
 	.symbols(apl_symbols),
 	.input_ready(apl_input_ready),
@@ -608,10 +643,11 @@ videobrain_core core
 	.reset_na   (~reset),
 	.power_cycle(power_cycle),
 	.rtc_clock_enable(status[44]),
+	.four_level_intensity(status[45]),
 	.rtc_time_valid(rtc_time_valid),
 	.rtc_time(rtc_time),
 	.timing_reset_na(~system_reset),
-	.progressive(progressive),
+	.progressive(1'b0),
 
 	.kbd_matrix (source_busy ? source_keys : kbd_matrix),
 	.joy_fire   (joy_fire),
@@ -670,6 +706,7 @@ videobrain_core core
 	.dl_index   (dl_index),
 	.cart_unload(status[28]),
 	.cart_loaded(cart_loaded),
+	.cart_load_error(cart_load_error),
 	.unknown_cart_profile ({5'd0, status[11:9]}),
 	.infoman_printer_fix(status[37]),
 	.apl_available (apl_available),
@@ -678,6 +715,9 @@ videobrain_core core
 	.apl_symbols (apl_symbols),
 	.apl_input_ready (apl_input_ready),
 	.apl_key_accepted (apl_key_accepted),
+	.tiny_available (tiny_available),
+	.tiny_input_ready (tiny_input_ready),
+	.tiny_key_accepted (tiny_key_accepted),
 
 	.pc0        (),
 	.pc1        (),
@@ -685,41 +725,77 @@ videobrain_core core
 );
 
 
-assign CLK_VIDEO = clk_sys;
+assign CLK_VIDEO = clk_video;
+
+// Transfer each stable native pixel to the selected video clock.
+reg pixel_toggle = 0;
+always @(posedge clk_sys) begin
+	if (RESET) pixel_toggle <= 0;
+	else if (ce_pix) pixel_toggle <= !pixel_toggle;
+end
+reg [2:0] pixel_sync = 0;
+reg [1:0] output_mode_meta = 0, output_mode = 0, output_mode_d = 0;
+reg video_ce = 0, video_field = 0;
+reg video_ready_meta = 0, video_ready_sync = 0;
+reg video_hs = 0, video_vs = 0, video_hb = 1, video_vb = 1, video_de = 0;
+reg [7:0] video_r = 0, video_g = 0, video_b = 0;
+always @(posedge clk_video) begin
+	video_ready_meta <= video_ready;
+	video_ready_sync <= video_ready_meta;
+	pixel_sync <= {pixel_sync[1:0], pixel_toggle};
+	output_mode_meta <= video_output;
+	output_mode <= output_mode_meta;
+	output_mode_d <= output_mode;
+	video_ce <= pixel_sync[2] != pixel_sync[1];
+	if (pixel_sync[2] != pixel_sync[1]) begin
+		{video_field, video_hs, video_vs, video_hb, video_vb, video_de, video_r, video_g, video_b} <=
+			{vid_field, vid_hs, vid_vs, vid_hb, vid_vb, vid_de, vid_r, vid_g, vid_b};
+	end
+	if (RESET) begin
+		video_ready_meta <= 0;
+		video_ready_sync <= 0;
+		pixel_sync <= 0;
+		video_ce <= 0;
+		output_mode_meta <= 0;
+		output_mode <= 0;
+		output_mode_d <= 0;
+	end
+end
 
 wire sd_ce, sd_hs, sd_vs, sd_hb, sd_vb;
 wire [7:0] sd_r, sd_g, sd_b;
-videobrain_linedoubler linedoubler (
-	.clk(clk_sys),
-	.reset(RESET | !linedouble),
-	.ce_pix(ce_pix),
-	.r(vid_r), .g(vid_g), .b(vid_b),
-	.hs(vid_hs), .vs(vid_vs), .hb(vid_hb), .vb(vid_vb),
+videobrain_progressive progressive_video (
+	.clk(clk_video),
+	.reset(RESET | !video_ready_sync | (output_mode == 0) | (output_mode != output_mode_d)),
+	.linedouble(output_mode == 2),
+	.ce_pix(video_ce), .field(video_field),
+	.r(video_r), .g(video_g), .b(video_b),
+	.hs(video_hs), .vs(video_vs),
 	.ce_out(sd_ce),
 	.r_out(sd_r), .g_out(sd_g), .b_out(sd_b),
 	.hs_out(sd_hs), .vs_out(sd_vs), .hb_out(sd_hb), .vb_out(sd_vb)
 );
 
-wire out_ce = linedouble ? sd_ce : ce_pix;
-wire out_hs = linedouble ? sd_hs : vid_hs;
-wire out_vs = linedouble ? sd_vs : vid_vs;
-wire out_hb = linedouble ? sd_hb : vid_hb;
-wire out_vb = linedouble ? sd_vb : vid_vb;
-wire [7:0] out_r = linedouble ? sd_r : vid_r;
-wire [7:0] out_g = linedouble ? sd_g : vid_g;
-wire [7:0] out_b = linedouble ? sd_b : vid_b;
+wire out_ce = video_ready_sync && (output_mode != 0 ? sd_ce : video_ce);
+wire out_hs = output_mode != 0 ? sd_hs : video_hs;
+wire out_vs = output_mode != 0 ? sd_vs : video_vs;
+wire out_hb = output_mode != 0 ? sd_hb : video_hb;
+wire out_vb = output_mode != 0 ? sd_vb : video_vb;
+wire [7:0] out_r = output_mode != 0 ? sd_r : video_r;
+wire [7:0] out_g = output_mode != 0 ? sd_g : video_g;
+wire [7:0] out_b = output_mode != 0 ? sd_b : video_b;
 
 video_freak video_freak
 (
 	.CLK_VIDEO(CLK_VIDEO),
 	.CE_PIXEL(out_ce),
-	.VGA_VS(out_vs & (progressive | ~vid_field)),
+	.VGA_VS(out_vs & ((output_mode != 0) | ~video_field)),
 	.HDMI_WIDTH(HDMI_WIDTH),
 	.HDMI_HEIGHT(HDMI_HEIGHT),
 	.VGA_DE(),
 	.VIDEO_ARX(VIDEO_ARX),
 	.VIDEO_ARY(VIDEO_ARY),
-	.VGA_DE_IN(linedouble ? ~(out_hb | out_vb) : vid_de),
+	.VGA_DE_IN(output_mode != 0 ? ~(out_hb | out_vb) : video_de),
 	.ARX(!ar ? 12'd4 : {10'd0, ar - 2'd1}),
 	.ARY(!ar ? 12'd3 : 12'd0),
 	.CROP_SIZE(12'd0),
@@ -739,6 +815,8 @@ video_mixer #(.GAMMA(0)) video_mixer
 	.hq2x(1'b0),
 
 	.gamma_bus(),
+	.HDMI_FREEZE(1'b0),
+	.freeze_sync(),
 
 	.R(out_r),
 	.G(out_g),

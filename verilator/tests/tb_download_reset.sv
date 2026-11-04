@@ -96,15 +96,17 @@ task rom_download(input [15:0] file_index);
     download = 1;
     #1;
     if (dut.reset !== 1) $fatal(1, "ROM download did not assert reset");
+    if (file_index[5:0] == 1 && (dut.cart_dl !== 1 || dut.dl_wr !== 1 || dut.dl_index !== 8'd2))
+        $fatal(1, "Cartridge download index %h did not reach loader", file_index);
     download = 0;
     release dut.source_dl;
     #1;
     if (dut.reset !== 0) $fatal(1, "Download reset did not release");
 endtask
 
-task hot_cartridge_download;
+task hot_cartridge_download(input [15:0] file_index);
     status[24] = 1;
-    index = 16'd1;
+    index = file_index;
     check_no_reset = 1;
     download = 1;
     #1;
@@ -149,9 +151,11 @@ initial begin
     keyboard_download(16'h0104);
     rom_download(16'd0);
     rom_download(16'd1);
+    rom_download(16'h0041); // second extension in BINVBC
     rom_download(16'd2);
     rom_download(16'd64);
-    hot_cartridge_download();
+    hot_cartridge_download(16'd1);
+    hot_cartridge_download(16'h0041);
     index = 4;
     download = 1;
     status[0] = 1;

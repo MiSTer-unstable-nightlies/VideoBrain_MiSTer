@@ -11,6 +11,9 @@ module apl_source_loader #(
     input wire [24:0] addr,
     input wire [7:0] data,
     input wire available,
+    input wire tiny_available,
+    input wire tiny_input_ready,
+    input wire tiny_key_accepted,
     input wire music_available,
     input wire symbols,
     input wire input_ready,
@@ -51,6 +54,7 @@ reg [7:0] frames = 0;
 reg [8:0] bank_gap = 0;
 reg shifting = 0, shifted = 0;
 reg timed = 0, rtc_script = 0, rtc_requested = 0;
+reg tiny_script = 0;
 reg rtc_active = 0;
 reg [3:0] rtc_index = 0;
 reg [7:0] rtc_hold, rtc_gap;
@@ -63,6 +67,9 @@ reg recording = 0;
 reg [6:0] music_notes = 0;
 reg [1:0] payload_phase = 0;
 reg [7:0] event_key, hold_frames, gap_frames;
+wire tiny_timed = timed && !rtc_script && tiny_available;
+wire tiny_event = tiny_script || (tiny_timed &&
+                  (event_key < 36 || event_key == MODE_LETTERS || event_key == MODE_SYMBOLS));
 
 function automatic [15:0] crc_byte(input [15:0] old_crc, input [7:0] byte_value);
     reg [15:0] value;
@@ -257,17 +264,18 @@ always @(posedge clk) begin
         timed <= 0;
         payload_phase <= 0;
         rtc_script <= 0;
+        tiny_script <= 0;
         rtc_requested <= 0;
         rtc_active <= 0;
         playback <= music_playback;
         recording <= 0;
         music_notes <= 0;
-    end else if (busy && ((!timed && state != RECEIVE && !available) ||
+    end else if (busy && (((!timed && !available) || (tiny_script && !tiny_available)) && state != RECEIVE ||
                          cancel || (started && !enabled))) begin
         state <= IDLE;
         keys <= 0;
-        error <= !timed && !available;
-        aborted <= timed || available;
+        error <= (!timed && !available) || (tiny_script && !tiny_available);
+        aborted <= !((!timed && !available) || (tiny_script && !tiny_available));
         rtc_active <= 0;
     end else begin
         case (state)
@@ -275,7 +283,7 @@ always @(posedge clk) begin
                 if (!download) begin
                     if (bad || length == 0 || length > 4096 ||
                         {3'd0, received} != length + 16'd8 || crc != expected_crc ||
-                        (timed ? payload_phase != 0 : !available) ||
+                        (timed ? (payload_phase != 0 || (tiny_script && !tiny_available)) : !available) ||
                         (rtc_requested && !rtc_valid)) begin
                         error <= 1;
                         state <= IDLE;
@@ -293,9 +301,10 @@ always @(posedge clk) begin
                             1: if (data != "B") bad <= 1;
                             2: if (data != "K") bad <= 1;
                             3: begin
-                                timed <= data == "2" || data == "3";
+                                timed <= data == "2" || data == "3" || data == "4";
                                 rtc_script <= data == "3";
-                                if (data != "1" && data != "2" && data != "3") bad <= 1;
+                                tiny_script <= data == "4";
+                                if (data != "1" && data != "2" && data != "3" && data != "4") bad <= 1;
                             end
                             4: length[7:0] <= data;
                             5: length[15:8] <= data;
@@ -308,6 +317,8 @@ always @(posedge clk) begin
                                         rtc_requested <= 1;
                                     if ((payload_phase == 0 && data > 35 && data < MODE_LETTERS &&
                                          !(rtc_script && data == RTC_INSERT)) ||
+                                        (tiny_script && payload_phase == 0 && data > 35 &&
+                                         data != MODE_LETTERS && data != MODE_SYMBOLS) ||
                                         (payload_phase == 1 && data == 0)) bad <= 1;
                                     payload_phase <= payload_phase == 2 ? 2'd0 : payload_phase + 1'b1;
                                 end else if (!valid_key(data)) bad <= 1;
@@ -316,8 +327,8 @@ always @(posedge clk) begin
                     end
                 end
             end
-            WAIT_START: if (enabled && (timed ? frame_tick : input_ready)) begin
-                if (timed && frames > 1) frames <= frames - 1'b1;
+            WAIT_START: if (enabled && ((tiny_script || tiny_timed) ? tiny_input_ready : timed ? frame_tick : input_ready)) begin
+                if (timed && !tiny_script && !tiny_timed && frames > 1) frames <= frames - 1'b1;
                 else begin
                     started <= 1;
                     shifted <= 0;
@@ -356,7 +367,16 @@ always @(posedge clk) begin
             SELECT_GAP: begin
                 gap_frames <= token;
                 shifting <= 0;
-                if (recording && music_notes == 79 && event_key != 11 && event_key != MODE_SYMBOLS) begin
+                if (tiny_event) begin
+                    if ((event_key == MODE_LETTERS || event_key == MODE_SYMBOLS) &&
+                        symbols == event_key[0]) begin
+                        keys <= 0;
+                        state <= RELEASE_KEY;
+                    end else begin
+                        keys <= 36'd1 << ((event_key == MODE_LETTERS || event_key == MODE_SYMBOLS) ? 6'd11 : event_key[5:0]);
+                        state <= HOLD_KEY;
+                    end
+                end else if (recording && music_notes == 79 && event_key != 11 && event_key != MODE_SYMBOLS) begin
                     // skip to closing shift/no-record
                     keys <= 0;
                     frames <= 0;
@@ -440,7 +460,13 @@ always @(posedge clk) begin
                     end
                 end
             end
-            HOLD_KEY: if (!timed && key_accepted) begin
+            HOLD_KEY: if (tiny_event && tiny_key_accepted) begin
+                keys <= 0;
+                if ({4'd0, position} + 16'd1 == length && !auto_repeat) begin
+                    complete <= 1;
+                    state <= IDLE;
+                end else state <= RELEASE_KEY;
+            end else if (!timed && key_accepted) begin
                 keys <= 0;
                 if (shifting) state <= SELECT_KEY;
                 else if ({4'd0, position} + 16'd1 == length) begin
@@ -457,7 +483,7 @@ always @(posedge clk) begin
                     shifted <= 0;
                     state <= READ_KEY;
                 end
-            end else if (timed && frame_tick) begin
+            end else if (timed && !tiny_event && frame_tick) begin
                 if (frames > 1) frames <= frames - 1'b1;
                 else if (shifting && symbols != event_key[0]) begin
                     frames <= 255;
@@ -482,8 +508,8 @@ always @(posedge clk) begin
                     end
                 end
             end
-            RELEASE_KEY: if (frame_tick || (timed && frames == 0)) begin
-                if (frames > 1) frames <= frames - 1'b1;
+            RELEASE_KEY: if (tiny_event ? tiny_input_ready : (frame_tick || (timed && frames == 0))) begin
+                if (!tiny_event && frames > 1) frames <= frames - 1'b1;
                 else if (rtc_active && rtc_index != 15) begin
                     rtc_index <= rtc_index + 1'b1;
                     state <= RTC_DIGIT;

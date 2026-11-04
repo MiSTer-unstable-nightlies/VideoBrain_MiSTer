@@ -10,7 +10,7 @@ cartridge ROMs and Expander 1 firmware are supplied separately; see
 | [APL/S brochure](apl-s-brochure/README.md) | Earthlander, portfolio and immediate calculations with `.txt` sources and `.vbk` files. |
 | [Save and reload tutorials](saves/README.md) | Money Minder, Information Manager and APL/S working tapes. |
 | [Music](music/README.md) | Music Teacher 1 MML sources and `.vbk` playback files. |
-| [Tiny BASIC](tinybasic/README.md) | Small interpreter checks with `.txt` sources and `.vbk` files. |
+| [Tiny BASIC](tinybasic-examples/README.md) | Small interpreter checks with `.txt` sources and `.vbk` files. |
 | [Blank tape](blank-tape.vbt) | Writable image for [tape recording](../docs/TAPE.md). |
 | [Blank printer image](blank-printer.vbp) | Empty image for [printer capture](../docs/PRINTER.md). |
 
@@ -21,13 +21,15 @@ required firmware, software and validation limits.
 
 ## Validation
 
-Run the file checks from the repository root:
+Run the input regression checks from the repository root:
 
 ```sh
 python3 -B verilator/tests/test_examples.py
 ```
 
-These check source/VBK pairs, byte-identical regeneration, keyboard checksums,
-tape image structure and blank images. They do not execute cartridge software.
+These use independent snapshots in `verilator/tests/fixtures/input`, checking
+source/VBK pairs, byte-identical regeneration, keyboard checksums, tape image
+structure and blank images. Editing or renaming examples does not update the
+regression fixtures. The checks do not execute cartridge software.
 Manual type-ins still need interpreter testing; the save tutorials and full
 music playback still need MiSTer checks. See each collection's instructions.

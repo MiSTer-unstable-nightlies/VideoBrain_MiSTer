@@ -1,13 +1,17 @@
 LIBRARY ieee;
 USE ieee.std_logic_1164.ALL;
 USE ieee.numeric_std.ALL;
+USE std.textio.ALL;
 USE work.base_pack.ALL;
 USE work.uv202_pack.ALL;
 
 ENTITY tb_cartridges IS
   GENERIC (apl_image : string := ""; info_image : string := "";
            apl_dump : string := ""; music_image : string := "";
-           info_patched_image : string := "");
+           info_patched_image : string := ""; tiny_image : string := "";
+           tiny_banked : boolean := false; vbc_cases : string := "";
+           tiny_supported : boolean := true; tiny_profile : natural := 6;
+           tiny_replacement : string := "");
 END ENTITY;
 
 ARCHITECTURE test OF tb_cartridges IS
@@ -25,11 +29,13 @@ ARCHITECTURE test OF tb_cartridges IS
   SIGNAL dl_index, fallback : uv8 := (OTHERS => '0');
   SIGNAL cart_unload : std_logic := '0';
   SIGNAL cart_loaded : std_logic;
+  SIGNAL cart_load_error : std_logic;
   SIGNAL infoman_printer_fix : std_logic := '0';
   SIGNAL apl_hold, apl_error, apl_available : std_logic;
   SIGNAL apl_symbols : std_logic;
   SIGNAL fetch : std_logic := '0';
   SIGNAL apl_input_ready, apl_key_accepted : std_logic;
+  SIGNAL tiny_available, tiny_input_ready, tiny_key_accepted : std_logic;
   SIGNAL apl_paused : std_logic := '0';
   SIGNAL joy_base : unsigned(13 DOWNTO 0);
   SIGNAL joy_step : unsigned(6 DOWNTO 0);
@@ -58,11 +64,14 @@ BEGIN
       dl_index => dl_index, unknown_cart_profile => fallback,
       infoman_printer_fix => infoman_printer_fix,
       cart_unload => cart_unload, cart_loaded => cart_loaded,
+      cart_load_error => cart_load_error,
       apl_hold => apl_hold, apl_paused => apl_paused,
       apl_available => apl_available, apl_load_error => apl_error,
       music_available => OPEN,
       apl_symbols => apl_symbols,
       apl_input_ready => apl_input_ready, apl_key_accepted => apl_key_accepted,
+      tiny_available => tiny_available, tiny_input_ready => tiny_input_ready,
+      tiny_key_accepted => tiny_key_accepted,
       joy_linear_base => joy_base, joy_linear_step => joy_step
     );
 
@@ -72,6 +81,10 @@ BEGIN
     VARIABLE byte : character;
     VARIABLE n : natural;
     VARIABLE fast_music : boolean;
+    FILE cases_file : text;
+    VARIABLE row : line;
+    VARIABLE case_number, expected_valid, expected_profile, expected_preset, first : natural;
+    VARIABLE payload_size : natural;
     TYPE lut_t IS ARRAY (0 TO 3, 0 TO 3) OF natural;
     CONSTANT banks : lut_t := ((0, 1, 2, 0), (2, 1, 2, 1),
                               (0, 2, 2, 0), (2, 2, 2, 2));
@@ -186,6 +199,131 @@ BEGIN
     END PROCEDURE;
 
   BEGIN
+    IF vbc_cases /= "" THEN
+      reset_na <= '1';
+      fallback <= to_unsigned(CART_BASIC, 8);
+      tick;
+      file_open(cases_file, vbc_cases & "/cases.txt", read_mode);
+      case_number := 0;
+      WHILE NOT endfile(cases_file) LOOP
+        readline(cases_file, row);
+        read(row, expected_valid); read(row, expected_profile);
+        read(row, expected_preset); read(row, first); read(row, payload_size);
+        REPORT "VBC case " & integer'image(case_number);
+        file_open(image, vbc_cases & "/" & to_string(case_number) & ".vbc", read_mode);
+        dl_index <= to_unsigned(2, 8);
+        n := 0;
+        WHILE NOT endfile(image) LOOP
+          read(image, byte);
+          dl_addr <= to_unsigned(n MOD 65536, 16);
+          dl_data <= to_unsigned(character'pos(byte), 8);
+          dl_wr <= '1'; tick;
+          IF case_number MOD 2 = 1 THEN dl_wr <= '0'; tick; END IF;
+          n := n + 1;
+        END LOOP;
+        file_close(image);
+        dl_wr <= '0'; tick;
+        dl_index <= x"FF"; tick; tick;
+        ASSERT cart_loaded = to_std_logic(expected_valid = 1) AND
+               cart_load_error = to_std_logic(expected_valid = 0)
+          REPORT "VBC acceptance mismatch" SEVERITY failure;
+        IF expected_valid = 0 THEN
+          read_at(16#1000#, 255); dma_at(16#1000#, 255);
+        ELSE
+          read_at(16#1000#, first); dma_at(16#1000#, first);
+          IF (expected_profile = 0 OR expected_profile = 5) AND
+             payload_size /= 2048 AND payload_size < 4096 THEN
+            read_at(16#1000# + payload_size, 255);
+            dma_at(16#1000# + payload_size, 255);
+          END IF;
+          IF expected_preset = 2 THEN
+            ASSERT joy_base = 2644 AND joy_step = 24 SEVERITY failure;
+          ELSE
+            ASSERT joy_base = 2580 AND joy_step = 7 SEVERITY failure;
+          END IF;
+          write_at(16#1800#, 16#A5#);
+          IF expected_profile = 1 OR expected_profile = 4 OR expected_profile = 6 THEN
+            read_at(16#1C00#, 16#A5#); dma_at(16#1C00#, 16#A5#);
+          ELSE
+            read_at(16#1800#, first);
+          END IF;
+          IF expected_profile = 2 THEN
+            write_at(16#3800#, 16#B6#); read_at(16#3C00#, 16#B6#);
+            read_at(16#3000#, 255);
+          ELSIF expected_profile = 3 THEN
+            write_at(16#1C00#, 16#C7#); read_at(16#1C00#, 16#C7#);
+            dma_at(16#1C00#, 16#C7#); read_at(16#3000#, 16#6D#);
+          ELSIF expected_profile = 4 THEN
+            read_at(16#3000#, 16#6D#);
+          ELSIF expected_profile = 5 OR expected_profile = 6 THEN
+            write_at(16#3000#, 16#D8#); read_at(16#3000#, 16#D8#);
+          ELSE
+            read_at(16#3000#, 255);
+          END IF;
+        END IF;
+        case_number := case_number + 1;
+      END LOOP;
+      file_close(cases_file);
+      cart_unload <= '1'; tick; cart_unload <= '0'; tick;
+      ASSERT cart_loaded = '0' AND cart_load_error = '0' SEVERITY failure;
+      REPORT "VBC cartridge tests passed";
+      std.env.stop;
+      WAIT;
+    END IF;
+    IF tiny_image /= "" THEN
+      reset_na <= '1';
+      IF tiny_banked THEN fallback <= to_unsigned(tiny_profile, 8);
+      ELSE fallback <= to_unsigned(CART_EXP_RAM, 8); END IF;
+      tick;
+      load_file(tiny_image);
+      ASSERT tiny_available = to_std_logic(tiny_supported) AND tiny_input_ready = '0'
+        REPORT "Incorrect Tiny BASIC recognition" SEVERITY failure;
+      IF NOT tiny_supported THEN
+        REPORT "Unsupported Tiny BASIC input ABI rejected";
+        std.env.stop; WAIT;
+      END IF;
+      IF tiny_banked THEN
+        write_at(16#17FF#, 6);
+        fetch <= '1'; addr <= to_unsigned(16#1009#, 14); tick;
+        fetch <= '0'; write_at(16#3FF9#, 0);
+      ELSE
+        fetch <= '1'; addr <= to_unsigned(16#1CD5#, 14); tick;
+        fetch <= '0'; write_at(16#0FE3#, 0);
+      END IF;
+      ASSERT tiny_input_ready = '1' REPORT "Tiny BASIC release not ready" SEVERITY failure;
+      write_at(16#0FEB#, 1);
+      ASSERT tiny_input_ready = '1' REPORT "Raw scan accepted too early" SEVERITY failure;
+      IF tiny_banked THEN
+        addr <= to_unsigned(16#3FF9#, 14); wdata <= to_unsigned(1, 8); wr <= '1'; WAIT FOR 1 ns;
+        ASSERT tiny_key_accepted = '1' REPORT "Tiny BASIC press not accepted" SEVERITY failure;
+        tick; wr <= '0';
+      ELSE
+        fetch <= '1'; addr <= to_unsigned(16#1CFE#, 14); WAIT FOR 1 ns;
+        ASSERT tiny_key_accepted = '1' REPORT "Tiny BASIC press not accepted" SEVERITY failure;
+        tick; fetch <= '0';
+      END IF;
+      ASSERT tiny_input_ready = '0' REPORT "Tiny BASIC stayed ready" SEVERITY failure;
+      write_at(16#0FEB#, 0);
+      ASSERT tiny_input_ready = '0' REPORT "Release became ready too early" SEVERITY failure;
+      IF tiny_banked THEN
+        fetch <= '1'; addr <= to_unsigned(16#1009#, 14); tick;
+        fetch <= '0'; write_at(16#3FF9#, 0);
+      ELSE
+        fetch <= '1'; addr <= to_unsigned(16#1CD5#, 14); tick;
+        fetch <= '0'; write_at(16#0FE3#, 0);
+      END IF;
+      ASSERT tiny_input_ready = '1' REPORT "Tiny BASIC did not resume" SEVERITY failure;
+      IF tiny_replacement /= "" THEN
+        load_file(tiny_replacement);
+        ASSERT tiny_available = '0' AND tiny_input_ready = '0'
+          REPORT "Tiny BASIC recognition survived ROM replacement" SEVERITY failure;
+      END IF;
+      cart_unload <= '1'; tick; cart_unload <= '0'; tick;
+      ASSERT tiny_available = '0' AND tiny_input_ready = '0'
+        REPORT "Tiny BASIC recognition survived unload" SEVERITY failure;
+      REPORT "Tiny BASIC input handshake passed";
+      std.env.stop; WAIT;
+    END IF;
     tick;
     ASSERT cart_loaded = '0' REPORT "Cartridge present at power-on" SEVERITY failure;
     read_at(16#1000#, 255); dma_at(16#1800#, 255);

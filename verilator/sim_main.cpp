@@ -287,7 +287,7 @@ int main(int argc, char** argv, char** env) {
         }
         if (ImGui::Button("Load cartridge...")) {
             ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Cartridge",
-                                                    ".bin,.*", ".");
+                                                    ".bin,.vbc,.*", ".");
         }
         ImGui::End();
 

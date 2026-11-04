@@ -6,6 +6,7 @@ reg reset = 1, frame_tick = 0, download = 0, wr = 0;
 reg [24:0] addr = 0;
 reg [7:0] data = 0;
 reg available = 1, symbols = 0, enabled = 0, cancel = 0;
+reg tiny_available = 0, tiny_input_ready = 0, tiny_key_accepted = 0;
 reg input_ready = 0, key_accepted = 0;
 reg emulate_input = 1;
 integer input_cycles = 0;
@@ -93,6 +94,65 @@ task finish_entry;
     if (busy || keys != 0) $fatal(1, "Playback failed to release");
 endtask
 
+task check_tiny_ready(input bit legacy);
+    emulate_input = 0; emulate_shift = 0; frame_tick = 0;
+    tiny_available = 1;
+    tiny_input_ready = 0; tiny_key_accepted = 0; symbols = 0; presses = 0;
+    packet[8] = 8'hf8; packet[9] = 8; packet[10] = 8;
+    packet[11] = 0; packet[12] = 8; packet[13] = 8;
+    packet[14] = 8'hf9; packet[15] = 8; packet[16] = 8;
+    packet[17] = 27; packet[18] = 8; packet[19] = 72;
+    packet[20] = 0; packet[21] = 8; packet[22] = 8;
+    init_packet(15); packet[3] = legacy ? "2" : "4";
+    send_packet(23, -1);
+    repeat (20) tick;
+    if (keys != 0 || started || !busy) $fatal(1, "Tiny BASIC started before ready");
+    tiny_input_ready = 1;
+    repeat (25) tick;
+    if (keys != 1 || presses != 1) $fatal(1, "Tiny BASIC missed ready key");
+    tiny_input_ready = 0; tiny_key_accepted = 1; tick; tiny_key_accepted = 0;
+    if (keys != 0) $fatal(1, "Tiny BASIC key not released on acceptance");
+    repeat (30) tick;
+    if (keys != 0 || presses != 1) $fatal(1, "Tiny BASIC did not wait for release");
+    tiny_input_ready = 1; repeat (15) tick;
+    if (keys != (36'd1 << 11)) $fatal(1, "Tiny BASIC SHIFT missing");
+    tiny_input_ready = 0; tiny_key_accepted = 1; tick; tiny_key_accepted = 0;
+    symbols = 1; repeat (10) tick;
+    if (keys != 0 || presses != 2) $fatal(1, "Tiny BASIC advanced before release");
+    tiny_input_ready = 1; repeat (15) tick;
+    if (keys != (36'd1 << 27)) $fatal(1, "Tiny BASIC NEXT missing");
+    tiny_input_ready = 0; tiny_key_accepted = 1; tick; tiny_key_accepted = 0;
+    repeat (30) tick;
+    if (keys != 0 || presses != 3 || !busy) $fatal(1, "Tiny BASIC advanced before NEXT completed");
+    tiny_input_ready = 1; repeat (15) tick;
+    if (keys != 1 || presses != 4) $fatal(1, "Tiny BASIC did not resume after NEXT");
+    tiny_input_ready = 0; tiny_key_accepted = 1; tick; tiny_key_accepted = 0;
+    if (!complete || busy || keys != 0 || error) $fatal(1, "Tiny BASIC did not finish");
+    tiny_available = 0;
+    emulate_input = 1; emulate_shift = 1; frame_tick = 1;
+    $display("Tiny BASIC VBK%0d acknowledged loader passed", legacy ? 2 : 4);
+endtask
+
+task check_tiny_wait;
+    emulate_input = 0; tiny_available = 1; tiny_input_ready = 1;
+    frame_tick = 0; presses = 0; symbols = 0;
+    packet[8] = 255; packet[9] = 3; packet[10] = 2;
+    packet[11] = 0; packet[12] = 8; packet[13] = 8;
+    init_packet(6); packet[3] = "2";
+    send_packet(14, -1);
+    repeat (25) tick;
+    if (keys != 0 || dut.state != 5) $fatal(1, "Tiny BASIC WAIT did not start");
+    frame_tick = 1; repeat (3) tick; frame_tick = 0;
+    repeat (20) tick;
+    if (keys != 0 || dut.state != 6) $fatal(1, "Tiny BASIC WAIT lost its gap");
+    frame_tick = 1; repeat (2) tick; frame_tick = 0;
+    repeat (15) tick;
+    if (keys != 1 || presses != 1) $fatal(1, "Tiny BASIC WAIT did not resume");
+    tiny_input_ready = 0; tiny_key_accepted = 1; tick; tiny_key_accepted = 0;
+    if (!complete || busy || error) $fatal(1, "Tiny BASIC WAIT did not finish");
+    tiny_available = 0; emulate_input = 1; frame_tick = 1;
+endtask
+
 task check_handshake;
     emulate_input = 0; input_ready = 0; symbols = 0; presses = 0;
     emulate_shift = 0;
@@ -133,7 +193,7 @@ endtask
 
 task check_arccosine;
     integer file_handle, count, expected, mode;
-    file_handle = $fopen("../examples/apl-s-manual-chapter-6/11-arccosine.vbk", "rb");
+    file_handle = $fopen("tests/fixtures/input/apl-s-manual-chapter-6/11-arccosine.vbk", "rb");
     if (!file_handle) $fatal(1, "Cannot open Arccosine VBK");
     count = $fread(packet, file_handle);
     $fclose(file_handle);
@@ -390,11 +450,11 @@ task check_rtc_clock;
     rtc = {1'b1, 8'h40, 8'h05, 8'h26, 8'h10, 8'h30, 8'h23, 8'h59, 8'h58};
     tick; tick;
     if (!dut.rtc_valid) $fatal(1, "RTC snapshot not latched");
-    fh = $fopen("../examples/clock-from-rtc.vbk", "rb");
-    if (!fh) $fatal(1, "Cannot open RTC example");
+    fh = $fopen("tests/fixtures/input/rtc-clock.vbk", "rb");
+    if (!fh) $fatal(1, "Cannot open RTC fixture");
     count = $fread(packet, fh);
     $fclose(fh);
-    if (count != 29 || packet[3] != "3") $fatal(1, "Bad RTC example");
+    if (count != 29 || packet[3] != "3") $fatal(1, "Bad RTC fixture");
     presses = 0; symbols = 0;
     send_packet(count, -1); finish_entry;
     if (!complete || error || presses != 22)
@@ -413,6 +473,12 @@ endtask
 initial begin
     tick; reset = 0; tick;
     enabled = 1;
+    if ($test$plusargs("tiny-only")) begin
+        check_tiny_ready(0);
+        check_tiny_ready(1);
+        check_tiny_wait;
+        $finish;
+    end
     check_handshake;
     enabled = 0; presses = 0; symbols = 0;
     packet[8] = 8'h61; packet[9] = 8'h56; packet[10] = 8'h61; packet[11] = 8'h9b;
@@ -598,6 +664,9 @@ initial begin
         if (!complete || error) $fatal(1, "Repeat disable failed");
     end
 
+    check_tiny_ready(0);
+    check_tiny_ready(1);
+    check_tiny_wait;
     check_arccosine;
     check_rtc_clock;
     $display("APL source loader tests passed");

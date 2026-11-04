@@ -29,7 +29,7 @@ PRINTED_SYMBOLS = {k: v for k, v in SYMBOLS.items()
                    if k not in (",", "\u00af", "{NEG}")}
 PRINTED_SYMBOLS.update({"%": 28, "\u00a2": 2, "{CENT}": 2})
 LOWER = dict(LETTERS, **{",": 7, ";": 3})
-TINYBASIC_SYMBOLS = {",": 14, "@": 2}
+TINYBASIC_SYMBOLS = {",": 14, "@": 2, "<": 12, ">": 8}
 FUNCTIONS = {name: bit for name, bit in KEYS.items() if len(name) > 1}
 BASE_NOTES = [34, 30, 35, 26, 31, 27, 18, 23, 14, 15, 10, 32,
               29, 20, 25, 16, 21, 17, 8, 13, 4, 9, 0, 5, 6, 2, 3]
@@ -120,7 +120,7 @@ def physical_keys(text):
     return packet(events, rtc=rtc)
 
 
-def keyboard_text(text, start_mode, profile="keyboard", hold_final=False):
+def keyboard_text(text, start_mode, profile="keyboard", hold_final=False, ready=False):
     if start_mode not in ("letters", "symbols"):
         raise ValueError("text input requires --start-mode letters or symbols")
     mode = start_mode == "symbols"
@@ -162,7 +162,14 @@ def keyboard_text(text, start_mode, profile="keyboard", hold_final=False):
                 events.append((MODE_LETTERS, 8, 8))
                 mode = False
             events.append((27, 8, 72))
-    return packet(events)
+    data = packet(events)
+    if ready:
+        if profile != "tinybasic":
+            raise ValueError("acknowledged input requires the Tiny BASIC profile")
+        if any(key > 35 and key not in (MODE_LETTERS, MODE_SYMBOLS) for key in data[8::3]):
+            raise ValueError("acknowledged Tiny BASIC input does not support WAIT")
+        return b"VBK4" + data[4:]
+    return data
 
 
 def music(text, start_mode, gap=None, min_hold=None, page_notes=None, page_wait=64, replay=False,
@@ -311,6 +318,7 @@ def main():
                         help="input profile (music range: C2..B5)")
     parser.add_argument("--start-mode", choices=("letters", "symbols"))
     parser.add_argument("--hold-final", action="store_true", help="omit the final NEXT; earlier lines still submit")
+    parser.add_argument("--ready", action="store_true", help="use acknowledged Tiny BASIC input (VBK4)")
     parser.add_argument("--gap", type=int, help="music key-off fields (default: 2)")
     parser.add_argument("--min-hold", type=int, help="music minimum held fields (default: 2)")
     timing_options = parser.add_mutually_exclusive_group()
@@ -324,6 +332,8 @@ def main():
     parser.add_argument("--page-wait", type=int, default=64, help="additional fields at a configured page boundary")
     parser.add_argument("--replay", action="store_true", help="press Music Teacher REPLAY after entry")
     args = parser.parse_args()
+    if args.ready and args.profile != "tinybasic":
+        parser.error("--ready requires --profile tinybasic")
     if args.hold_final and args.profile in ("music", "keys"):
         parser.error("--hold-final applies to text input")
     if (args.replay or args.page_notes is not None or args.timing is not None
@@ -342,7 +352,7 @@ def main():
                          args.page_notes, args.page_wait, args.replay,
                          args.bank_fields, args.bank_ready, timing)
         else:
-            data = keyboard_text(text, args.start_mode, args.profile, args.hold_final)
+            data = keyboard_text(text, args.start_mode, args.profile, args.hold_final, args.ready)
         output = args.output or args.source.with_suffix(".vbk")
         if output.resolve() == args.source.resolve():
             raise ValueError("output would overwrite source")

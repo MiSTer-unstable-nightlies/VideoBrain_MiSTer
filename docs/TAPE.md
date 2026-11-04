@@ -8,7 +8,9 @@ Load Expander 1 firmware. Copy `examples/blank-tape.vbt` to the SD card with a n
 
 Choose **Mount Playback Tape** for LOAD or VERIFY. To load a core recording, wait for Tape idle, then mount that saved file in the playback slot. Playback resumes from its current position across remote stops. Use **Rewind Playback Tape** before repeating LOAD or VERIFY. **Rewind Record Tape** starts the next SAVE from the beginning of its image. Playback does not reset the record deck's append position. Use different files in the two slots, especially for EDIT, which reads the source while writing a new database. Both remotes enabled is a setup state and does not start a transfer. Reset rewinds and cancels tape activity. An interrupted recording is invalid; a new SAVE can replace it. If the record remote switches to playback without a signal transition, the image and playback position are preserved. Actual recordings retain the initial constant signal interval before the first transition.
 
-Both mount entries are disabled while either deck is busy. Wait for both decks to finish before switching cores.
+With VideoBrain image-creation support in Main_MiSTer, **New Record Tape** creates and mounts an 8 MiB blank in the `saves` subdirectory of the core's games directory. Files are named `Tape_1.vbt`, `Tape_2.vbt`, and so on without replacing existing files. Close the OSD to see the result. Older Main versions require the blank-file procedure above.
+
+Both mount entries and **New Record Tape** are disabled while either deck is busy. Wait for both decks to finish before switching cores.
 
 At the end of a playback image, the deck releases busy and reports **End of tape**, even if the cartridge leaves its playback remote enabled. The tape stays at the end; use **Rewind Playback Tape** to play it again. This notice does not indicate whether LOAD or VERIFY succeeded.
 

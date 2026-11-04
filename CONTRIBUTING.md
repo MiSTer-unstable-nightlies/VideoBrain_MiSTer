@@ -27,6 +27,9 @@ Simulators accept `--res1`, `--res2`, `--cart` and, for the headless simulator, 
 
 ## Validation
 
+Post-feature-lock [refactor investigations](docs/REFACTOR.md) use behavior
+equivalence as the gate for each bounded change.
+
 From the repository root in WSL or Linux:
 
 ```sh

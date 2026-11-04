@@ -65,6 +65,7 @@ VHD_SRC = \
 	$(RTL)/uv201/uv201_render.vhd \
 	$(RTL)/f3853.vhd \
 	$(RTL)/buffered_bus.vhd \
+	$(RTL)/cartridge_loader.vhd \
 	$(RTL)/sys_bus.vhd \
 	$(RTL)/videobrain_io.vhd \
 	$(RTL)/f3870_timer.vhd \
@@ -253,13 +254,41 @@ test-expander1:
 	$(GHDL) -r --std=08 --workdir=out/expander1 tb_f3870_timer --assert-level=error
 	$(GHDL) -r --std=08 --workdir=out/expander1 tb_expander1 --assert-level=error
 
+.PHONY: test-tiny-input
+test-tiny-input:
+	python3 tests/tiny_input_fixtures.py out/tiny-input
+	@mkdir -p out/tiny-input/work
+	$(GHDL) -a --std=08 --workdir=out/tiny-input/work $(RTL)/f8/base_pack.vhd \
+		$(RTL)/uv201/uv201_pack.vhd $(RTL)/uv202/uv202_pack.vhd \
+		$(RTL)/uv201/uv201_regs.vhd $(RTL)/buffered_bus.vhd \
+		$(RTL)/cartridge_loader.vhd $(RTL)/sys_bus.vhd tests/tb_cartridges.vhd
+	@set -e; while read image supported profile; do \
+		$(GHDL) -r --std=08 --workdir=out/tiny-input/work tb_cartridges \
+			-gtiny_image=out/tiny-input/$$image -gtiny_banked=true \
+			-gtiny_supported=$$supported -gtiny_profile=$$profile \
+			-gtiny_replacement=out/tiny-input/unmarked.bin --assert-level=error \
+			--ieee-asserts=disable; \
+	done < out/tiny-input/cases.txt
+
 test-cartridges:
 	@mkdir -p out/cartridges
 	$(GHDL) -a --std=08 --workdir=out/cartridges $(RTL)/f8/base_pack.vhd \
 		$(RTL)/uv201/uv201_pack.vhd $(RTL)/uv202/uv202_pack.vhd \
 		$(RTL)/uv201/uv201_regs.vhd $(RTL)/buffered_bus.vhd \
-		$(RTL)/sys_bus.vhd tests/tb_cartridges.vhd
+		$(RTL)/cartridge_loader.vhd $(RTL)/sys_bus.vhd tests/tb_cartridges.vhd
 	$(GHDL) -r --std=08 --workdir=out/cartridges tb_cartridges --assert-level=error
+
+.PHONY: test-vbc
+test-vbc:
+	python3 tests/test_vbc.py
+	python3 tests/test_vbc.py --fixtures out/vbc
+	@mkdir -p out/vbc/work
+	$(GHDL) -a --std=08 --workdir=out/vbc/work $(RTL)/f8/base_pack.vhd \
+		$(RTL)/uv201/uv201_pack.vhd $(RTL)/uv202/uv202_pack.vhd \
+		$(RTL)/uv201/uv201_regs.vhd $(RTL)/buffered_bus.vhd \
+		$(RTL)/cartridge_loader.vhd $(RTL)/sys_bus.vhd tests/tb_cartridges.vhd
+	$(GHDL) -r --std=08 --workdir=out/vbc/work tb_cartridges \
+		-gvbc_cases=out/vbc --assert-level=error --ieee-asserts=disable
 
 test-expander1-serial: check-expander1-rom test-expander1
 	$(GHDL) -a --std=08 --workdir=out/expander1 tests/tb_expander1_serial.vhd
@@ -370,19 +399,44 @@ $(TEST_BUILD_ID):
 	@mkdir -p $(@D)
 	@printf '%s\n' '`define BUILD_DATE "simulation"' > $@
 
-test-video: $(TEST_BUILD_ID)
+test-video: $(TEST_BUILD_ID) test-progressive-sync test-video-clock
 	@mkdir -p out/video
 	$(GHDL) -a --std=08 --workdir=out/video $(RTL)/f8/base_pack.vhd \
 		$(RTL)/uv201/uv201_pack.vhd $(RTL)/uv202/uv202_pack.vhd \
 		$(RTL)/uv202/uv202_clkgen.vhd $(RTL)/uv202/uv202_timing.vhd \
 		$(RTL)/uv201/uv201_render.vhd tests/video_test_source.vhd
 	$(GHDL) synth --std=08 --workdir=out/video --out=verilog video_test_source > out/video/source.v
+	# Qualify Quartus-visible generate-local signals for Icarus.
+	sed 's/{R_in,G_in,B_in}/{genblk1.R_in,genblk1.G_in,genblk1.B_in}/' ../sys/video_mixer.sv > out/video/video_mixer.sv
+	# Model the FPGA power-up value of the OSD field toggle.
+	sed 's/reg        f1;/reg        f1 = 0;/' ../sys/osd.v > out/video/osd.v
 	iverilog -g2012 -i -I$(TEST_INCLUDE) -I.. -s tb_video -o out/video/test \
 		tests/tb_video.sv out/video/source.v ../VideoBrain.sv $(RTL)/videobrain_reset.sv \
-		../sys/video_freak.sv $(RTL)/videobrain_linedoubler.sv
+		../sys/video_freak.sv out/video/video_mixer.sv out/video/osd.v ../sys/video_freezer.sv $(RTL)/videobrain_progressive.sv
 	vvp out/video/test
 
 .PHONY: test-video
+
+test-progressive-sync:
+	@mkdir -p out/video
+	iverilog -g2012 -s tb_progressive_sync -o out/video/sync \
+		tests/tb_progressive_sync.sv $(RTL)/videobrain_progressive.sv
+	vvp out/video/sync
+
+.PHONY: test-progressive-sync
+
+test-video-clock: test-video-clock-control
+	python3 tests/test_video_clock.py
+
+.PHONY: test-video-clock
+
+test-video-clock-control:
+	@mkdir -p out/video
+	iverilog -g2012 -s tb_video_clock_control -o out/video/clock_control \
+		tests/tb_video_clock_control.sv $(RTL)/videobrain_video_clock.sv
+	vvp out/video/clock_control
+
+.PHONY: test-video-clock-control
 
 out/joystick_timing/core.v: $(VHD_SRC)
 	@mkdir -p out/joystick_timing
@@ -633,7 +687,7 @@ test-printer-infoman-apple: check-res1-rom check-res2-rom check-expander1-rom ch
 		"+bios2=$(RES2_ROM)" \
 		"+firmware=$(EXPANDER1_ROM)" \
 		"+cart=$(INFOMAN_APPLE_CART)" \
-		"+fixture=../examples/saves/Information Manager - APPLE.vbt" +apple $(INFOMAN_APPLE_ARGS)
+		"+fixture=tests/fixtures/input/saves/Information Manager - APPLE.vbt" +apple $(INFOMAN_APPLE_ARGS)
 
 .PHONY: test-printer-infoman test-printer-infoman-apple
 

@@ -20,8 +20,8 @@ Reset, cartridge load/unload (including loading without machine reset), disconne
 
 Paired Sticks defaults to Off, preserving four independent controllers. Each left stick/D-pad and Fire still control its own joystick. The right stick and Fire 2 control the paired joystick selected by the mode:
 
-- 1+2 / 3+4: 1 <-> 2 and 3 <-> 4.
-- Doubles: 1 <-> 3 and 2 <-> 4.
+- 1+2 / 3+4 (Pinball): 1 <-> 2 and 3 <-> 4.
+- 1+3 / 2+4 (Doubles): 1 <-> 3 and 2 <-> 4.
 
 Map Fire and Fire 2 separately in MiSTer's button definitions (defaults A/B). MiSTer's upstream interface provides both analog sticks and button reports.
 

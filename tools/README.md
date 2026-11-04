@@ -3,11 +3,25 @@
 Run commands from the repository root. Python tools require Python 3.9 or
 later; use `python` instead of `python3` where appropriate.
 
+## Timing
+
+After fitting the project, extract detailed timing paths without rebuilding:
+
+```sh
+quartus_sta -t tools/report_timing.tcl
+```
+
+Reports go to `output_files/timing_audit`. `index.txt` maps numbered path
+reports to destination clocks. Results use the fitted netlist and current SDC
+files; RTL changes require a new fit. The audit uses the default timing corner
+and startup PLL frequencies; runtime PLL configurations need separate analysis.
+
 ## Telehack
 
 Copy [telehack.sh](telehack.sh) to `/media/fat/Scripts/` and run it from MiSTer's
 Scripts menu. It waits for F5 from Timeshare before connecting; run it again
-to stop. See [Timeshare setup](../docs/EXPANDER1.md#internet-connection).
+to stop. The launcher shows the resulting state until Enter is pressed. See
+[Timeshare setup](../docs/EXPANDER1.md#internet-connection).
 
 ## BIOS
 
@@ -20,6 +34,10 @@ sh tools/make_boot_rom.sh uvres1.bin uvres2.bin boot0.rom
 See [installation](../README.md#installing) for ROM checksums and placement.
 
 ## Cartridges
+
+`vbc.py` packs, inspects, and extracts RIFF cartridges with explicit hardware
+mapping and optional identity/peripheral metadata. See the
+[VBC format and commands](../docs/VBC.md).
 
 `convert_software.py` assembles APL/S and Information Manager from MAME chip
 archives. Supply a directory containing `vidbrain (MAME)/complang.zip` and
@@ -53,6 +71,7 @@ Convert APL/S input, text, physical keys or Music Teacher MML to `.vbk`:
 python3 tools/keyboard_input.py program.txt program.vbk
 python3 tools/keyboard_input.py text.txt text.vbk --profile keyboard --start-mode letters
 python3 tools/keyboard_input.py basic.txt basic.vbk --profile tinybasic --start-mode letters
+python3 tools/keyboard_input.py basic.txt basic-ready.vbk --profile tinybasic --start-mode letters --ready
 python3 tools/keyboard_input.py keys.txt keys.vbk --profile keys
 python3 tools/keyboard_input.py examples/clock-from-rtc.txt examples/clock-from-rtc.vbk --profile keys
 python3 tools/keyboard_input.py music.mml music.vbk --profile music --start-mode letters
@@ -70,7 +89,8 @@ The `keys` profile accepts physical key scripts such as `NEXT 8 8` and
 
 The `tinybasic` profile uses Tiny BASIC's comma mapping (SHIFT+N) instead
 of the printed COMMA key, and supports `@` with SHIFT+P for arrays.
-It also requires `--start-mode`.
+It also requires `--start-mode`. `--ready` produces acknowledged VBK4 input;
+see [Tiny BASIC acknowledged entry](../docs/KEYBOARD-INPUT.md#tiny-basic-acknowledged-entry).
 
 Music conversion defaults to score timing. `--timing note` retains note
 lengths and adds octave-switch time; `--replay` requests replay after entry.

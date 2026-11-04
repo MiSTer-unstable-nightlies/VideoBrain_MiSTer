@@ -4,8 +4,8 @@ from pathlib import Path
 import struct
 import sys
 
-root = Path(__file__).resolve().parents[2]
-b = (root / 'examples/saves/Information Manager - APPLE.vbt').read_bytes()
+root = Path(__file__).resolve().parent / 'fixtures' / 'input'
+b = (root / 'saves/Information Manager - APPLE.vbt').read_bytes()
 n = struct.unpack_from('<I', b, 8)[0]
 falls = []
 stamp = 0

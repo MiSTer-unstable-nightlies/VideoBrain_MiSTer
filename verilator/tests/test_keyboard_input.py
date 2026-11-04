@@ -1,6 +1,7 @@
 from pathlib import Path
 from contextlib import redirect_stderr
 import io
+import json
 import struct
 import subprocess
 import sys
@@ -42,14 +43,24 @@ def music_pitches(body):
 
 
 class KeyboardTests(unittest.TestCase):
+    def test_tinybasic_acknowledged_format(self):
+        source = '10 PRINT "HI",1\nRUN\n'
+        timed = keyboard_text(source, 'letters', profile='tinybasic')
+        ready = keyboard_text(source, 'letters', profile='tinybasic', ready=True)
+        self.assertEqual(ready[:4], b'VBK4')
+        self.assertEqual(ready[4:], timed[4:])
+        with self.assertRaises(ValueError):
+            keyboard_text('{WAIT:10}', 'letters', profile='tinybasic', ready=True)
+
     def test_tinybasic_keyboard_round_trip(self):
         # Tiny BASIC VBCHARS table; BIOS READKBJOY matrix scan order.
-        table = (' I"U!Y\\T&R9E8W7Q'
+        table = (' I"U!Y>T<R9E8W7Q'
                  '%A.O#K)J(H/G-F6D'
                  '5S4Z1P@L$M:N,B=V'
                  "+C3X2?0;^'*")
         text = ('PRINT "A",1\nPRINT 1,2\nPRINT "B",2+3\n'
-                '@(1)=7\nA$="HI"\nPRINT A$\nPRINT LEN(0)\n')
+                '@(1)=7\nA$="HI"\nPRINT A$\nPRINT LEN(0)\n'
+                'PRINT 1<2,2>1,1<=1,2>=2\n')
         symbols = False
         decoded = []
         for key, _, _ in events(keyboard_text(text, 'letters', profile='tinybasic')):
@@ -103,18 +114,17 @@ class KeyboardTests(unittest.TestCase):
                     self.assertNotEqual(subprocess.run(command + arguments,
                                                        capture_output=True).returncode, 0)
 
-    def test_music_timing_examples(self):
-        directory = Path(__file__).resolve().parents[2] / 'examples' / 'music'
-        score = {p.stem: p for p in directory.glob('*.vbk')}
-        sources = {p.stem: p for p in directory.glob('*.mml')}
-        self.assertTrue(score, 'bundled music examples are missing')
-        self.assertEqual(set(score), set(sources))
-        for name in score:
-            with self.subTest(song=name):
-                text = sources[name].read_text(encoding='utf-8')
-                self.assertEqual(score[name].read_bytes(),
-                                 music(text, 'letters', timing='score'))
-                score_events = events(score[name].read_bytes())
+    def test_music_timing_fixtures(self):
+        directory = Path(__file__).resolve().parent / 'fixtures' / 'input'
+        cases = [case for case in json.loads((directory / 'cases.json').read_text())
+                 if case['profile'] == 'music']
+        self.assertTrue(cases, 'music fixtures are missing')
+        for case in cases:
+            with self.subTest(song=case['source']):
+                text = (directory / case['source']).read_text(encoding='utf-8')
+                data = (directory / case['output']).read_bytes()
+                self.assertEqual(data, music(text, **case['options']))
+                score_events = events(data)
                 note_events = events(music(text, 'letters', timing='note'))
                 self.assertEqual(score_events[:5], note_events[:5])
                 self.assertEqual(score_events[-3:], note_events[-3:])
@@ -162,7 +172,7 @@ class KeyboardTests(unittest.TestCase):
                 physical_keys(text)
 
     def test_rtc_clock_script(self):
-        source = Path(__file__).resolve().parents[2] / 'examples' / 'clock-from-rtc.txt'
+        source = Path(__file__).resolve().parent / 'fixtures' / 'input' / 'rtc-clock.txt'
         blob = physical_keys(source.read_text())
         self.assertEqual(blob[:4], b'VBK3')
         self.assertEqual(events(blob), [

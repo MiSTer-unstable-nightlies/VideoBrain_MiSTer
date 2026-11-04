@@ -7,6 +7,8 @@ capture controller sends no acknowledgements or response characters.
 
 ## Capture a report or session
 
+With VideoBrain image-creation support in Main_MiSTer, **Printer > New Capture Image** creates and mounts a 1 MiB blank in the `saves` subdirectory of the core's games directory. Files are named `Printer_1.vbp`, `Printer_2.vbp`, and so on without replacing existing files. Close the OSD to see the result, then wait for Ready before starting capture. This entry is disabled while the printer is busy. Older Main versions require the blank-file procedure below.
+
 Information Manager's original prototype has printer row-count and serial
 startup problems in the tested execution path. Printer > InfoMan Fix (Reload)
 is Off by default, preserving the original software. To use the correction,
@@ -51,6 +53,21 @@ alone does not print them in the tested original-ROM configuration. Capture neve
 bytes from modem TX. PC ON/OFF controls display of control characters on the
 screen and does not start or stop capture. See the validation results below for
 the tested duplex/echo combinations.
+
+## Tiny BASIC Enhanced
+
+Enhanced 0.8 mirrors text to the Expander modem and printer outputs at 300
+baud, with CR/LF line endings. Load Expander 1 firmware before starting the
+cartridge. Without a responding Expander, serial output disables itself.
+Output includes the startup banner, prompts, keyboard echo and PRINT/LIST
+results. Screen wrapping does not insert serial line breaks.
+
+For a test transcript, mount a blank `.vbp`, select 300 baud and Start
+Capture, then enter or load the test. Choose Stop and Save before exporting
+with `extract_printer.py`. Reset stops capture; start a new capture after
+reset. UART capture uses System > UART Output > Printer and the same 300-baud
+Linux capture command below. Serial mirroring runs at about 27 characters
+per second and slows screen output. Enhanced 0.8 hardware validation is pending.
 
 ## Tools
 

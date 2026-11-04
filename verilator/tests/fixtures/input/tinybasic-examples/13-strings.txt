@@ -1,0 +1,5 @@
+NEW
+10 A$="HI"
+20 PRINT A$
+30 PRINT LEN(0)
+RUN

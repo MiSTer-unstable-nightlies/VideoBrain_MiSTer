@@ -18,7 +18,7 @@ TARGETS = (
     "test-cpu-gate", "test-cpu-clock", "test-cpu-ports", "test-smi",
     "test-smi-clock", "test-sean-diag", "test-cpu-bus-wait",
     "test-uv201-wait", "test-arbiter", "test-fetcher-bus", "test-yint",
-    "test-render", "test-video", "test-cartridges", "test-source-loader",
+    "test-render", "test-video", "test-cartridges", "test-tiny-input", "test-source-loader",
     "test-download-reset", "test-status-messages", "test-joystick",
     "test-joystick-timing", "test-audio", "test-cpu-audio",
     "test-audio-path", "test-expander1", "test-tape", "test-dual-tape",

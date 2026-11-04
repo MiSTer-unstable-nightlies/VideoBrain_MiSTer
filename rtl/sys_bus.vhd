@@ -54,6 +54,7 @@ ENTITY sys_bus IS
     dl_index : IN uv8;
     cart_unload : IN std_logic := '0';
     cart_loaded : OUT std_logic := '0';
+    cart_load_error : OUT std_logic := '0';
     apl_hold : OUT std_logic;
     apl_paused : IN std_logic := '0';
     apl_available : OUT std_logic;
@@ -62,6 +63,9 @@ ENTITY sys_bus IS
     apl_symbols : OUT std_logic := '0';
     apl_input_ready : OUT std_logic := '0';
     apl_key_accepted : OUT std_logic := '0';
+    tiny_available : OUT std_logic := '0';
+    tiny_input_ready : OUT std_logic := '0';
+    tiny_key_accepted : OUT std_logic := '0';
 
     joy_linear_base : OUT unsigned(13 DOWNTO 0) := to_unsigned(2580, 14);
     joy_linear_step : OUT unsigned(6 DOWNTO 0) := to_unsigned(7, 7);
@@ -168,6 +172,7 @@ ARCHITECTURE rtl OF sys_bus IS
 
   SIGNAL rdata_l : uv8;
   SIGNAL cart_cpu_rdata : uv8;
+  SIGNAL cart_cpu_padding, bb_cart_rom_padding : std_logic;
   SIGNAL cart_cpu_sel : std_logic;
 
   SIGNAL bb_res2_addr  : unsigned(10 DOWNTO 0);
@@ -181,14 +186,21 @@ ARCHITECTURE rtl OF sys_bus IS
   SIGNAL bb_cart_ram_sel : std_logic;
 
   SIGNAL dl_res1, dl_res2, dl_cart : std_logic;
+  SIGNAL cart_dl_addr : unsigned(15 DOWNTO 0);
+  SIGNAL cart_file_valid, cart_declared : std_logic;
+  SIGNAL cart_profile, cart_joy_preset : uv8;
   SIGNAL cs1, cs2, exp : std_logic;
   SIGNAL cart_dl_prev : std_logic := '0';
   SIGNAL cart_loaded_l : std_logic := '0';
   SIGNAL cart_crc     : uv32 := (OTHERS => '1');
+  TYPE tiny_abi_t IS ARRAY (0 TO 8) OF uv8;
+  CONSTANT TINY_ABI : tiny_abi_t := (x"56", x"42", x"4B", x"01", x"06", x"10", x"09", x"3F", x"F9");
+  SIGNAL cart_tiny_abi : std_logic_vector(TINY_ABI'range) := (OTHERS => '0');
   SIGNAL cart_size    : unsigned(16 DOWNTO 0) := (OTHERS => '0');
   SIGNAL cart_auto_type : uv8 := to_unsigned(CART_UNRECOGNIZED, 8);
   SIGNAL cart_effective_type : uv8;
   SIGNAL music_input : std_logic;
+  SIGNAL tiny_input, tiny_scan, tiny_key_down : std_logic := '0';
 
   -- writes above 17ff distinguish larger carts from mirrored 2k images
   SIGNAL cart_big : std_logic := '0';
@@ -220,7 +232,53 @@ BEGIN
   END PROCESS;
 
   cart_loaded <= cart_loaded_l;
-  apl_available <= '1' WHEN cart_auto_type = to_unsigned(CART_COMPLANG, 8) ELSE '0';
+  apl_available <= '1' WHEN cart_loaded_l = '1' AND
+    cart_auto_type = to_unsigned(CART_COMPLANG, 8) AND
+    cart_effective_type = to_unsigned(CART_COMPLANG, 8) ELSE '0';
+  tiny_input <= '1' WHEN cart_loaded_l = '1' AND dl_cart = '0' AND
+    ((cart_size = to_unsigned(4096, cart_size'length) AND NOT cart_crc = x"F3BFF3D3" AND
+      cart_effective_type = to_unsigned(CART_EXP_RAM, 8)) OR
+     (cart_size = to_unsigned(16384, cart_size'length) AND
+      (NOT cart_crc = x"425E4F8E" OR cart_tiny_abi = "111111111") AND
+      cart_effective_type = to_unsigned(CART_BASIC, 8))) ELSE '0';
+  tiny_available <= tiny_input;
+  tiny_key_accepted <= '1' WHEN tiny_input = '1' AND tiny_scan = '1' AND
+    ((cart_size = to_unsigned(4096, cart_size'length) AND tiny_key_down = '1' AND
+      ext_rd = '1' AND ext_fetch = '1' AND ext_addr = x"1CFE") OR
+     (cart_size = to_unsigned(16384, cart_size'length) AND ext_wr = '1' AND
+      ext_addr = x"3FF9" AND ext_wdata /= x"00")) ELSE '0';
+  PROCESS (clk, reset_na) IS
+  BEGIN
+    IF reset_na = '0' THEN
+      tiny_scan <= '0';
+      tiny_key_down <= '0';
+      tiny_input_ready <= '0';
+    ELSIF rising_edge(clk) THEN
+      IF tiny_input = '0' THEN
+        tiny_scan <= '0';
+        tiny_key_down <= '0';
+        tiny_input_ready <= '0';
+      ELSE
+        IF ext_wr = '1' AND a_eff = x"0FEB" THEN
+          IF ext_wdata = x"00" THEN tiny_key_down <= '0';
+          ELSE tiny_key_down <= '1'; END IF;
+        END IF;
+        IF ext_rd = '1' AND ext_fetch = '1' AND
+          ((cart_size = to_unsigned(4096, cart_size'length) AND ext_addr = x"1CD5") OR
+           (cart_size = to_unsigned(16384, cart_size'length) AND basic_bank = 6 AND ext_addr = x"1009")) THEN
+          tiny_scan <= '1';
+        END IF;
+        IF tiny_key_accepted = '1' THEN
+          tiny_input_ready <= '0';
+          tiny_scan <= '0';
+        ELSIF tiny_scan = '1' AND ext_wr = '1' AND ext_wdata = x"00" AND
+          ((cart_size = to_unsigned(4096, cart_size'length) AND a_eff = x"0FE3") OR
+           (cart_size = to_unsigned(16384, cart_size'length) AND ext_addr = x"3FF9")) THEN
+          tiny_input_ready <= '1';
+        END IF;
+      END IF;
+    END IF;
+  END PROCESS;
   music_available <= music_input;
   -- ed01 and the static-staff patches share the bank acceptance hook
   music_input <= '1' WHEN cart_loaded_l = '1' AND dl_cart = '0' AND
@@ -276,7 +334,8 @@ BEGIN
   a_eff <= cpu_addr_fold(ext_addr);
   bus_wr <= ext_wr;
   bus_wdata <= ext_wdata;
-  cart_effective_type <= cart_auto_type
+  cart_effective_type <= cart_profile WHEN cart_declared = '1' AND cart_file_valid = '1' ELSE
+                         cart_auto_type
                          WHEN cart_auto_type /= to_unsigned(CART_UNRECOGNIZED, 8)
                          ELSE unknown_cart_profile;
 
@@ -394,19 +453,39 @@ BEGIN
     END IF;
   END PROCESS;
 
+  PROCESS (clk) IS
+  BEGIN
+    IF rising_edge(clk) THEN
+      cart_cpu_padding <= to_std_logic(cart_declared = '1' AND
+        resize(cart_cpu_a, cart_size'length) >= cart_size);
+      bb_cart_rom_padding <= to_std_logic(cart_declared = '1' AND
+        resize(bb_cart_rom_a, cart_size'length) >= cart_size);
+    END IF;
+  END PROCESS;
+
   bb_cart_rom_a <= basic_bank & bb_cart_addr(10 DOWNTO 0)
     WHEN cart_effective_type = CART_BASIC ELSE
     resize(bb_cart_addr AND (cart_big & "11111111111"), 14);
 
-  ext_rdata <= cart_cpu_rdata WHEN cart_cpu_sel = '1' ELSE rdata_l;
+  ext_rdata <= (OTHERS => '1') WHEN cart_cpu_sel = '1' AND cart_cpu_padding = '1' ELSE
+               cart_cpu_rdata WHEN cart_cpu_sel = '1' ELSE rdata_l;
   bb_cart_rdata <= (OTHERS => '1') WHEN cart_loaded_l = '0' ELSE
                   bb_cart_ram_rdata WHEN bb_cart_ram_sel = '1'
+                  ELSE (OTHERS => '1') WHEN bb_cart_rom_padding = '1'
                   ELSE bb_cart_rom_rdata;
 
   -- one process per array for ghdl ram inference
   dl_res1 <= dl_wr WHEN dl_index = to_unsigned(0, 8) ELSE '0';
   dl_res2 <= dl_wr WHEN dl_index = to_unsigned(1, 8) ELSE '0';
-  dl_cart <= dl_wr WHEN dl_index = to_unsigned(2, 8) ELSE '0';
+  u_cartridge_loader : ENTITY work.cartridge_loader
+    PORT MAP (
+      clk => clk, unload => cart_unload,
+      download => to_std_logic(dl_index = to_unsigned(2, 8)),
+      wr => dl_wr, addr => dl_addr, data => dl_data,
+      rom_wr => dl_cart, rom_addr => cart_dl_addr,
+      valid => cart_file_valid, declared => cart_declared,
+      profile => cart_profile, joy_preset => cart_joy_preset
+    );
 
   PROCESS (clk) IS
   BEGIN
@@ -419,7 +498,7 @@ BEGIN
 
   cart_rom_we <= '0' WHEN cart_unload = '1' ELSE
                  dl_cart WHEN dl_index = to_unsigned(2, 8) ELSE printer_patch_active;
-  cart_rom_wa <= dl_addr(13 DOWNTO 0) WHEN dl_index = to_unsigned(2, 8) ELSE
+  cart_rom_wa <= cart_dl_addr(13 DOWNTO 0) WHEN dl_index = to_unsigned(2, 8) ELSE
                  to_unsigned(INFOMAN_PRINTER_PATCH(printer_patch_index).address, 14);
   cart_rom_wdata <= dl_data WHEN dl_index = to_unsigned(2, 8) ELSE
                     INFOMAN_PRINTER_PATCH(printer_patch_index).data;
@@ -437,19 +516,30 @@ BEGIN
   BEGIN
     IF rising_edge(clk) THEN
       IF cart_unload = '1' THEN
+        cart_load_error <= '0';
         cart_loaded_l <= '0';
         cart_dl_prev <= '0';
         cart_crc <= (OTHERS => '1');
+        cart_tiny_abi <= (OTHERS => '0');
         cart_size <= (OTHERS => '0');
         cart_auto_type <= to_unsigned(CART_UNRECOGNIZED, 8);
         joy_linear_base <= to_unsigned(2580, 14);
         joy_linear_step <= to_unsigned(7, 7);
       ELSIF dl_index = to_unsigned(2, 8) THEN
         cart_dl_prev <= '1';
-        IF dl_wr = '1' THEN
-          IF dl_addr = to_unsigned(0, 16) THEN
+        IF cart_dl_prev = '0' THEN
+          cart_loaded_l <= '0'; cart_load_error <= '0';
+          cart_tiny_abi <= (OTHERS => '0');
+        END IF;
+        IF dl_wr = '1' AND dl_addr = 0 THEN
+          cart_loaded_l <= '0'; cart_load_error <= '0';
+          cart_tiny_abi <= (OTHERS => '0');
+        END IF;
+        IF dl_cart = '1' THEN
+          IF cart_dl_addr = to_unsigned(0, 16) THEN
             cart_loaded_l <= '0';
             cart_crc <= crc32_byte((OTHERS => '1'), dl_data);
+            cart_tiny_abi <= (OTHERS => '0');
             cart_size <= to_unsigned(1, cart_size'length);
             cart_auto_type <= to_unsigned(CART_UNRECOGNIZED, 8);
             joy_linear_base <= to_unsigned(2580, 14);
@@ -458,15 +548,29 @@ BEGIN
             cart_crc <= crc32_byte(cart_crc, dl_data);
             cart_size <= cart_size + 1;
           END IF;
+          IF cart_dl_addr >= 16#06D0# AND cart_dl_addr <= 16#06D8# THEN
+            cart_tiny_abi(to_integer(cart_dl_addr) - 16#06D0#) <=
+              to_std_logic(dl_data = TINY_ABI(to_integer(cart_dl_addr) - 16#06D0#));
+          END IF;
         END IF;
       ELSIF cart_dl_prev = '1' THEN
         cart_dl_prev <= '0';
-        IF cart_size /= 0 THEN cart_loaded_l <= '1'; END IF;
+        cart_load_error <= NOT cart_file_valid;
+        IF cart_size /= 0 AND cart_file_valid = '1' THEN cart_loaded_l <= '1'; END IF;
         -- tennis uses fixed scaling instead of the bios gain selection
         IF cart_size = to_unsigned(16#1000#, cart_size'length) AND
            (NOT cart_crc) = CART_CRC_TENNIS THEN
           joy_linear_base <= to_unsigned(2644, 14);
           joy_linear_step <= to_unsigned(24, 7);
+        END IF;
+        IF cart_declared = '1' AND cart_file_valid = '1' THEN
+          IF cart_joy_preset = 1 THEN
+            joy_linear_base <= to_unsigned(2580, 14);
+            joy_linear_step <= to_unsigned(7, 7);
+          ELSIF cart_joy_preset = 2 THEN
+            joy_linear_base <= to_unsigned(2644, 14);
+            joy_linear_step <= to_unsigned(24, 7);
+          END IF;
         END IF;
         IF cart_size = to_unsigned(16#0800#, cart_size'length) AND
            (NOT cart_crc) = CART_CRC_TIMESHARE THEN
@@ -480,7 +584,10 @@ BEGIN
         ELSIF cart_size = to_unsigned(16#2000#, cart_size'length) AND
               (NOT cart_crc) = CART_CRC_INFOMAN THEN
           cart_auto_type <= to_unsigned(CART_INFOMAN, 8);
-          IF infoman_printer_fix = '1' THEN cart_loaded_l <= '0'; END IF;
+          IF infoman_printer_fix = '1' AND
+             (cart_declared = '0' OR cart_profile = CART_INFOMAN) THEN
+            cart_loaded_l <= '0';
+          END IF;
         ELSIF is_standard_cart(cart_crc, cart_size) THEN
           cart_auto_type <= to_unsigned(CART_STD, 8);
         END IF;
@@ -513,6 +620,8 @@ BEGIN
         printer_patch_index <= 0;
       ELSIF cart_dl_prev = '1' AND
             infoman_printer_fix = '1' AND
+            cart_file_valid = '1' AND
+            (cart_declared = '0' OR cart_profile = CART_INFOMAN) AND
             cart_size = to_unsigned(16#2000#, cart_size'length) AND
             (NOT cart_crc) = CART_CRC_INFOMAN THEN
         printer_patch_active <= '1';
@@ -533,9 +642,9 @@ BEGIN
       IF cart_unload = '1' THEN
         cart_big <= '0';
       ELSIF dl_cart = '1' THEN
-        IF dl_addr(11) = '1' THEN
+        IF cart_dl_addr(11) = '1' THEN
           cart_big <= '1';
-        ELSIF dl_addr = x"0000" THEN
+        ELSIF cart_dl_addr = x"0000" THEN
           cart_big <= '0';
         END IF;
       END IF;
@@ -631,7 +740,7 @@ BEGIN
     IF rising_edge(clk) THEN
       IF cart_unload = '1' OR power_cycle = '1' THEN
         cart_bank <= 0;
-      ELSIF dl_cart = '1' AND dl_addr = x"0000" THEN
+      ELSIF dl_cart = '1' AND cart_dl_addr = x"0000" THEN
         cart_bank <= 0;
       -- apl's rom bus conflict makes both data and address select the bank
       ELSIF reset_na = '1' AND ext_wr = '1' AND cs1 = '1' AND
@@ -646,7 +755,7 @@ BEGIN
   BEGIN
     IF rising_edge(clk) THEN
       IF reset_na = '0' OR cart_unload = '1' OR power_cycle = '1' OR
-         (dl_cart = '1' AND dl_addr = x"0000") THEN
+         (dl_cart = '1' AND cart_dl_addr = x"0000") THEN
         basic_bank <= (OTHERS => '0');
       ELSIF ext_wr = '1' AND cart_loaded_l = '1' AND
             cart_effective_type = CART_BASIC AND a_eff = 16#17FF# THEN

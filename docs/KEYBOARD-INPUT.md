@@ -1,6 +1,6 @@
 # Keyboard input files
 
-Choose **Keyboard > Load Keyboard File** and select a `.vbk`. A keyboard key cancels entry. **Keyboard > Menu Aborts VBK > Off** lets entry continue while the OSD is open.
+Choose **Keyboard > Load Keyboard File** and select a `.vbk`. A keyboard key cancels entry. **Keyboard > OSD Aborts VBK > Off** lets entry continue while the OSD is open.
 
 See [converter commands and options](../tools/README.md#keyboard-files).
 
@@ -13,6 +13,21 @@ With no cartridge inserted, load `examples/clock-from-rtc.vbk` from **Keyboard >
 `examples/clock-from-rtc-v2.vbk` is an alternative for a clock that has not yet been set. It selects CLOCK, ensures upper SHIFT, enters the RTC digits, sends one additional 0 to advance to the start screen, ensures lower SHIFT, then presses G. The source uses QUESTION for the physical 0/? key. It sends no S and inserts no wait. The revised file requires hardware verification.
 
 The new `VBK3` format accepts `RTC [hold gap]` in the physical-keys converter. It expands to the 16 physical numeric keys for `YYYYMMDDWWHHMMSS` when reached. `WW` is Monday=01 through Sunday=07. Existing VBK1/VBK2 files are unchanged; an older core rejects VBK3.
+
+## Tiny BASIC acknowledged entry
+
+`--profile tinybasic --start-mode letters --ready` creates VBK4 files. The
+loader waits for Tiny BASIC to accept each key and release, including after
+NEXT. Acknowledged entry supports cancelfix (CRC32 `F3BFF3D3`) with the 4K RAM fallback and
+the banked 24x15 image (CRC32 `425E4F8E`) with the BASIC profile. Updated cores
+also accept 16 KiB BASIC images declaring keyboard ABI 1 at ROM offset `06D0`:
+`56 42 4B 01 06 10 09 3F F9`. This declares bank 6, poll address `1009`, and
+acceptance/release address `3FF9`. It works with raw ROMs and VBC containers;
+the mapper or VBC identity alone does not enable it. Other ABI versions are
+rejected. Older cores still require the recognized ROM hash. Hardware validation
+is pending. On these ROMs, existing VBK2 files also use acknowledged entry
+for matrix keys and mode controls, ignoring their encoded hold and gap.
+Explicit WAIT events retain their encoded timing. VBK3 retains its encoded timing.
 
 MiSTer supplies RTC once at core startup. The loader advances it locally and allows roughly four seconds for the numeric keypresses. The host RTC must be set; this feature does not synchronize time over the network itself. Clock setting on hardware still needs verification.
 

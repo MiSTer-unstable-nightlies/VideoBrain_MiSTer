@@ -43,6 +43,13 @@ if [ "${1:-}" = --bridge ]; then
     exit 1
 fi
 
+pause() {
+    [ -t 0 ] || return 0
+    printf '\nPress Enter to return to the MiSTer menu.'
+    IFS= read -r _ || true
+}
+trap pause EXIT
+
 for command in flock nohup readlink stty socat telnet; do
     command -v "$command" >/dev/null || {
         echo "Required command missing: $command"
@@ -59,7 +66,8 @@ if ! flock -n 9; then
             ''|*[!0-9]*) echo 'Invalid bridge PID.'; exit 1 ;;
         esac
         kill -TERM "$pid"
-        echo 'Telehack bridge stopping. Run this script again to reconnect.'
+        echo 'Telehack bridge: turning OFF.'
+        echo 'Run this script again to reconnect.'
     else
         echo 'Telehack bridge is starting or stopping. Try again shortly.'
     fi
@@ -69,7 +77,7 @@ fi
 rm -f "$STATE/pid"
 nohup /bin/bash "$(readlink -f "$0")" --bridge \
     </dev/null >"$LOG" 2>&1 &
-echo 'Telehack bridge started.'
+echo 'Telehack bridge: ON and waiting for F5.'
 echo 'Load VideoBrain, Expander 1 firmware and Timeshare.'
 echo 'Set UART connection to None and UART Output to Modem.'
 echo 'Return to Timeshare and press F5 to connect at 300 baud.'

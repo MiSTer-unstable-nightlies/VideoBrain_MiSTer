@@ -4,6 +4,10 @@ All eighteen known cartridges are recognized. Current MiSTer coverage includes g
 
 Known raw dumps are identified by CRC-32 and use the matching slot behavior. `--cart-type` and the OSD's System > Mapper Fallback setting apply only to unrecognized images: 0 standard, 1 Timeshare, 2 Money Minder, 3 CompLang, 4 Infoman, 5 4K RAM, 6 BASIC. Assembled APL/S and Information Manager images are also identified automatically.
 
+[RIFF VBC cartridges](VBC.md) declare their mapping explicitly and take
+precedence over fingerprint detection and Mapper Fallback. Optional metadata
+does not change settings unless it supplies a defined, explicit declaration.
+
 For power cycle, Master Control, cartridge unloading and hot loading, see [reset behavior](RESET.md).
 
 Fingerprints for all sixteen released single-image cartridges come from MAME's [VideoBrain software list](https://github.com/mamedev/mame/blob/master/hash/vidbrain.xml).
@@ -72,6 +76,13 @@ Save as a `.bin` file: 8,192 bytes. Information Manager also requires [Expander 
 `make -C verilator test-cartridges` checks bank selection, RAM, DMA, reset behavior, and the existing cartridge mappings without ROM files.
 
 ## Software behavior
+
+### Hello World Rev. 6
+
+Kurt Woloch's June 23, 2012 [Hello World source](https://orphanedgames.com/videobrain/f8_programming/f8_source/videobrain_hello_world_KW_Rev6.zip)
+uses DAC codes 1, 2 and 3 as music volume levels. This establishes that
+VideoBrain music software used all three nonzero levels of the 2-bit audio DAC;
+previously examined software had not established volume control.
 
 ### Financier
 

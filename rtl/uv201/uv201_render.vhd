@@ -26,6 +26,7 @@ ENTITY uv201_render IS
 
     final_mod  : IN std_logic_vector(7 DOWNTO 0);
     background : IN std_logic_vector(7 DOWNTO 0);
+    four_level_intensity : IN std_logic := '0';
     x_zoom     : IN std_logic;
     video_en   : IN std_logic;
 
@@ -60,6 +61,7 @@ ARCHITECTURE rtl OF uv201_render IS
   SIGNAL idx_c      : std_logic_vector(4 DOWNTO 0);
   SIGNAL obj_idx    : std_logic_vector(4 DOWNTO 0);
 
+  SIGNAL intensity : std_logic_vector(1 DOWNTO 0);
   SIGNAL off_l, on_l : uv8;
   SIGNAL r_c, g_c, b_c : uv8;
   SIGNAL show        : std_logic;
@@ -186,8 +188,14 @@ BEGIN
              ELSE background(4 DOWNTO 0);
   idx_c   <= obj_idx XOR final_mod(4 DOWNTO 0);
 
-  off_l <= x"C0" WHEN idx_c(4) = '1' ELSE x"00";
-  on_l  <= x"FF" WHEN idx_c(4) = '1' ELSE x"A0";
+  intensity <= idx_c(4 DOWNTO 3) WHEN four_level_intensity = '1' ELSE
+               idx_c(4) & idx_c(4);
+
+  -- Experimental four-level DAC mapping; analog levels need hardware comparison.
+  WITH intensity SELECT off_l <=
+    x"00" WHEN "00", x"40" WHEN "01", x"80" WHEN "10", x"C0" WHEN OTHERS;
+  WITH intensity SELECT on_l <=
+    x"A0" WHEN "00", x"C0" WHEN "01", x"E0" WHEN "10", x"FF" WHEN OTHERS;
 
   r_c <= on_l WHEN idx_c(0) = '1' ELSE off_l;
   g_c <= on_l WHEN idx_c(1) = '1' ELSE off_l;

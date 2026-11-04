@@ -63,6 +63,7 @@ module top(
    wire        apl_symbols;
    wire        music_available;
    wire        apl_input_ready, apl_key_accepted;
+   wire        tiny_available, tiny_input_ready, tiny_key_accepted;
    wire [35:0] source_keys;
    reg source_vs_d = 0;
    always @(posedge clk_sys) source_vs_d <= vid_vs;
@@ -71,6 +72,8 @@ module top(
       .clk(clk_sys), .reset(reset), .frame_tick(vid_vs && !source_vs_d),
       .download(ioctl_download && ioctl_index == 5), .wr(ioctl_wr),
       .addr(ioctl_addr), .data(ioctl_dout), .available(apl_available),
+      .tiny_available(tiny_available), .tiny_input_ready(tiny_input_ready),
+      .tiny_key_accepted(tiny_key_accepted),
       .music_available(music_available),
       .symbols(apl_symbols), .enabled(1'b1), .cancel(|kbd_matrix),
       .input_ready(apl_input_ready), .key_accepted(apl_key_accepted),
@@ -163,6 +166,9 @@ module top(
       .apl_symbols (apl_symbols),
       .apl_input_ready (apl_input_ready),
       .apl_key_accepted (apl_key_accepted),
+      .tiny_available (tiny_available),
+      .tiny_input_ready (tiny_input_ready),
+      .tiny_key_accepted (tiny_key_accepted),
 
       .pc0        (pc0),
       .pc1        (pc1),

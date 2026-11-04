@@ -7,6 +7,7 @@ reg [127:0] status = 0;
 reg started = 0, complete = 0, source_error = 0;
 reg aborted = 0, calibrating = 0;
 reg busy = 0, tape_error = 0, rewound = 0, ended = 0, cart_loaded = 0;
+reg cart_error = 0;
 integer messages = 0, before_count;
 reg [3:0] printer_state=0, printer_fault=0;
 reg printer_busy=0,printer_active=0;
@@ -66,6 +67,7 @@ initial begin
     force dut.tape_rewound = rewound;
     force dut.tape_ended = ended;
     force dut.cart_loaded = cart_loaded;
+    force dut.cart_load_error = cart_error;
     force dut.joystick_connected = 1'b1;
     tick; reset = 0; tick;
     osd = 1; tick;
@@ -175,6 +177,12 @@ initial begin
     status[22]=1;printer_fault=5;printer_state=8;tick();frame;
     if(dut.printer_notice!=0) $fatal(1,"Disabled printer notice queued");
     status[22]=0;tick();frame;
+    osd = 1; cart_error = 1; tick;
+    before_count = messages; frame;
+    if (messages != before_count) $fatal(1, "Cartridge error bypassed OSD deferral");
+    osd = 0; expect_message(28);
+    before_count = messages; repeat (3) frame;
+    if (messages != before_count) $fatal(1, "Cartridge error repeated");
     $display("Status popup and tape menu guard tests passed");
     $finish;
 end

@@ -73,8 +73,9 @@ identity. Keep Timeshare at its default 300 baud and full duplex.
 
 The bridge runs in the background. Run the script again to stop it, including
 while it is waiting for F5. After a disconnection, run it again to reconnect.
-Status and errors are written to `/tmp/videobrain-telehack.log`. The launcher
-requires Bash, flock, nohup, readlink, stty, socat and telnet; it does not install them.
+The launcher displays the start or stop result until Enter is pressed. Status
+and errors are written to `/tmp/videobrain-telehack.log`. The launcher requires
+Bash, flock, nohup, readlink, stty, socat and telnet; it does not install them.
 Stop other UART services first. The display setup below still applies.
 
 For a foreground connection instead, use SSH. The tested MiSTer installation

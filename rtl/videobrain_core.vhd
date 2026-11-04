@@ -20,6 +20,7 @@ ENTITY videobrain_core IS
     power_cycle : IN std_logic := '0';
     timing_reset_na : IN std_logic := '0';
     progressive : IN std_logic := '0';
+    four_level_intensity : IN std_logic := '0';
     rtc_clock_enable : IN std_logic := '0';
     rtc_time_valid : IN std_logic := '0';
     rtc_time : IN unsigned(55 DOWNTO 0) := (OTHERS => '0');
@@ -85,6 +86,7 @@ ENTITY videobrain_core IS
     dl_index : IN uv8;
     cart_unload : IN std_logic := '0';
     cart_loaded : OUT std_logic := '0';
+    cart_load_error : OUT std_logic := '0';
     unknown_cart_profile: IN uv8;
     infoman_printer_fix : IN std_logic := '0';
     apl_available : OUT std_logic;
@@ -93,6 +95,9 @@ ENTITY videobrain_core IS
     apl_symbols : OUT std_logic := '0';
     apl_input_ready : OUT std_logic := '0';
     apl_key_accepted : OUT std_logic := '0';
+    tiny_available : OUT std_logic := '0';
+    tiny_input_ready : OUT std_logic := '0';
+    tiny_key_accepted : OUT std_logic := '0';
 
     pc0 : OUT uv16;
     pc1 : OUT uv16;
@@ -432,6 +437,7 @@ BEGIN
       dl_index       => dl_index,
       cart_unload    => cart_unload,
       cart_loaded    => cart_loaded,
+      cart_load_error => cart_load_error,
       apl_hold       => OPEN,
       apl_paused     => apl_paused,
       apl_available  => apl_available,
@@ -440,6 +446,9 @@ BEGIN
       apl_symbols    => apl_symbols,
       apl_input_ready => apl_input_ready,
       apl_key_accepted => apl_key_accepted,
+      tiny_available => tiny_available,
+      tiny_input_ready => tiny_input_ready,
+      tiny_key_accepted => tiny_key_accepted,
       joy_linear_base => joy_linear_base,
       joy_linear_step => joy_linear_step,
       unknown_cart_profile => unknown_cart_profile,
@@ -629,6 +638,7 @@ BEGIN
       fifo_pop   => fifo_pop_l,
       final_mod  => std_logic_vector(final_mod_l),
       background => std_logic_vector(background_l),
+      four_level_intensity => four_level_intensity,
       x_zoom     => x_zoom_l,
       video_en   => uv_o_enb,
       ce_pix     => ce_pix,

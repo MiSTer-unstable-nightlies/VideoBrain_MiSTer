@@ -1,6 +1,6 @@
 # Accuracy report
 
-Current source status, October 27, 2026. This describes the core approaching 1.0, rather than a particular released RBF.
+Current source status, November 3, 2026. The core is nearly ready for 1.0. This describes the source, rather than a particular released RBF.
 
 ## What this core represents
 
@@ -8,7 +8,9 @@ The aim is to recreate the VideoBrain's hardware behavior as faithfully as the a
 
 The evidence consists of preserved documentation, reverse engineering, board connection records, original software and cassette data, photographs, screenshots, and videos, together with MAME and implementation tests. Direct access to an original VideoBrain is unavailable. Tests on MiSTer establish behavior of this core; they are not direct measurements of an original VideoBrain.
 
-No core bugs are currently known.
+No core bugs are currently known. Release qualification still requires validation of the exact candidate source and RBF, including timing closure and MiSTer checks of the supported output modes and peripheral workflows. Positive timing results alone do not establish that the current source or release artifact has been qualified.
+
+Tiny BASIC Enhanced and the Tennis adaptation are separate software projects; their remaining work does not define core release readiness.
 
 ## Evidence and confidence
 
@@ -70,7 +72,7 @@ Joystick presets select linear delay ranges by cartridge to provide useful cente
 
 The audio filter is tuned against available recordings, including their unknown receiver and capture response. Its band limit also provides alias protection. It is not a component-level recreation of the RF sound chain.
 
-Keyboard files supply timed matrix inputs. Tape images preserve digital recording intervals and replay them at the Expander input. Both retain firmware participation while replacing physical input or storage media. Progressive output (240p and line-doubled 480p) changes vertical rollover and can affect joystick measurements across that boundary; native interlaced operation is the baseline.
+Keyboard files supply timed matrix inputs. Tape images preserve digital recording intervals and replay them at the Expander input. Both retain firmware participation while replacing physical input or storage media. Progressive output (240p and line-doubled 480p) buffers native video without changing machine timing. A dedicated fractional PLL provides constant pixel spacing and line lengths. Each output frame has 263 lines at the nominal native average field cadence; the shorter native field receives a black bottom row. PLL frequency quantization contributes less than two source pixels of buffer drift per day.
 
 ## Remaining accuracy work
 
@@ -91,3 +93,13 @@ The remaining Information Manager pass is intended to complete the [manual](INFO
 Core quality-of-life features meet the current release goals, including relative analog movement for Tennis with three speed settings. Spinner support and MIDI input for Music Teacher or homebrew are optional future work. A 1080p 5x crop is deferred because native interlacing needs separate handling.
 
 Further Music Teacher patch improvements and a possible musical homebrew exploring the machine's full audible frequency range are software projects, separate from core release requirements.
+
+### Experimental intensity mapping
+
+Video > Colors defaults to 16 (Original), retaining the established two-level
+palette. The optional 32 (Patent) mode uses both intensity bits for four
+ordered RGB levels. The [Umtech patent](https://patents.google.com/patent/US4232374A/en) specifies four
+intensities; the current numerical levels are experimental and have not been
+matched to analog measurements. See [color values](TINYBASIC-COLORS.md). This
+optional mode changes the BIOS color bars, which use intensity codes 01 and 10.
+Whether the original machine supported four distinct intensities is unresolved.

@@ -58,7 +58,7 @@ Original-machine measurements and MiSTer acceptance tests remain separate.
 
 `make test-rtc-boot` checks optional RTC clock initialization against the original BIOS, including reset reseeding, disabled/missing and late RTC, and midnight rollover. Supply RES1 and RES2 ROMs. MiSTer verification remains separate.
 
-`make test-video` checks native and progressive timing, staged output selection and application, and uncropped 480p line duplication. It compares pixels, sync and blanking against the source and checks the 189 by 484 active area within the 526-line output raster. The top-level routing test substitutes a passthrough mixer; hardware output still requires MiSTer validation.
+`make test-video` checks native machine timing across output modes, staged output selection, buffered pixels, bottom-row padding, progressive frame cadence, and uncropped 480p line duplication using native and progressive clock models. It checks the 189 by 242 and 189 by 484 active areas, exercises the upstream MiSTer mixer, and compares OSD stripe positions across rows. `make test-progressive-sync` checks fixed line period, sync width and picture position relative to sync, plus frame cadence, in both progressive modes. `make test-video-clock` checks PLL rate selection, stalled reconfiguration writes, queued requests, lock gating, reset, and clock quantization drift. Both also run as part of `test-video`. Hardware output and audio still require MiSTer validation.
 
 `make test-cpu-branches` runs ROM-free GHDL checks for BR7 across all 64 ISAR values and every BT/BF mask across all 32 status-register values, including directly loaded zero/sign combinations. The 4,160 cases use signed displacement boundaries, check branch destinations and operand/fetch cycle lengths, and verify that ISAR or status flags remain unchanged.
 
@@ -132,7 +132,7 @@ Run these from `verilator/`. ROM-based captures require user-supplied BIOS, firm
 | `tests/tb_*` | Run CPU, bus, video, audio, cartridge, keyboard, joystick and tape regressions. |
 | `tests/run_regressions.py` | Run the focused regression suite with logs and explicit exclusions. |
 | `tests/run_tools.py` | Check APL/S, keyboard/music, tape, printer-image and printer-capture tools. |
-| `tests/test_examples.py` | Check bundled source/VBK pairs, checksums, tape structure and blank images; included in `test-tools`. |
+| `tests/test_examples.py` | Check pinned source/VBK pairs, checksums, tape structure and blank images in `tests/fixtures/input`; included in `test-tools`. |
 | `tests/audio_filter_design.py`, `tests/test_audio_alias.py` | Check filter coefficients and alias rejection with `make test-audio`. |
 | `tests/check_audio_path.py` | Check the MiSTer I2S output path with `make test-audio-path` (requires NumPy). |
 | `tests/analyze_logic_csv.cpp`, `tests/check_logic_csv.py`, `tests/summarize_logic_captures.py` | Analyze logic captures and check the analyzer with `make test-logic-csv`. |
