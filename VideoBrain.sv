@@ -48,17 +48,24 @@ wire [1:0] ar = status[122:121];
 localparam CONF_STR = {
 	"VideoBrain;UART300:110;",
 
+
 	// === CARTRIDGE ===
 	"F1,BINVBC,Load Cartridge;",
 	"-;",
 
-	// === TAPE ===
-	"d8S0,VBT,Mount Playback Tape;",
-	"T[23],Rewind Playback Tape;",
-	"d8S1,VBT,Mount Record Tape;",
-	"d8T[46],New Record Tape;",
-	"T[30],Rewind Record Tape;",
-	"-;",
+
+	// === JOYSTICKS ===
+	"P3,Joysticks;",
+	"P3-;",
+	"P3O[5],Joysticks,Connected,Disconnected;",
+	"D4P3R[20],Calibrate Sticks;",
+	"P3-;",
+	"D4P3O[15:14],Stick Preset,Auto,Tennis,Gladiator;",
+	"D4P3O[38],Analog Mode,Absolute,Relative;",
+	"DDP3O[40:39],Relative Speed,Slow,Normal,Fast;",
+	"P3-;",
+	"D4P3O[17:16],Paired Sticks,Off,1+2 / 3+4 (Pinball),1+3 / 2+4 (Doubles);",
+
 
 	// === KEYBOARD ===
 	"P4,Keyboard;",
@@ -73,34 +80,44 @@ localparam CONF_STR = {
 	"P4-;",
 	"P4O[29],Esc Soft Reset,On,Off;",
 
-	// === JOYSTICKS ===
-	"P3,Joysticks;",
-	"P3-;",
-	"P3O[5],Joysticks,Connected,Disconnected;",
-	"D4P3R[20],Calibrate Sticks;",
-	"P3-;",
-	"D4P3O[15:14],Stick Preset,Auto,Tennis,Gladiator;",
-	"D4P3O[38],Analog Mode,Absolute,Relative;",
-	"DDP3O[40:39],Relative Speed,Slow,Normal,Fast;",
-	"P3-;",
-	"D4P3O[17:16],Paired Sticks,Off,1+2 / 3+4 (Pinball),1+3 / 2+4 (Doubles);",
+
+	// === TAPES ===
+	"P6,Tapes;",
+	"P6-;",
+	"d8P6S0,VBT,Mount Playback Tape;",
+	"P6T[23],Rewind Playback Tape;",
+	"P6-;",
+	"d8P6S1,VBT,Mount Record Tape;",
+	"P6T[30],Rewind Record Tape;",
+	"P6-;",
+	"d8P6T[46],Create New Tape;",
+	"P6-;",
+	// == TAPE STATUS ==
+	"h3P6-,Record Tape Rewound;",	
+	"h2P6-,Playback Tape Rewound;",	
+	"h1P6-,Tape Created;",
+
 
 	// === PRINTER ===
 	"P5,Printer;",
 	"P5-;",
 	"d6P5S2,VBP,Mount Capture Image;",
 	"d6P5T[47],New Capture Image;",
+	"P5-;",
 	"P5O[33],Capture Baud,300,110;",
 	"P5-;",
 	"d7P5T[34],Start Capture;",
 	"DEP5T[35],Stop Capture and Save;",
+	"P5-;",
 	"DEP5T[36],Show Capture Status;",
 	"P5-;",
 	"P5O[37],Info. Manager Fix,Off,On;",
 	"P5-;",
+	// == PRINTER STATUS ==
 	"h9P5-,Printer Active;",
 	"hBP5-,Printer Busy;",
 	"hCP5-,Printer Error;",
+
 
 	// === VIDEO ===
 	"P1,Video;",
@@ -111,7 +128,11 @@ localparam CONF_STR = {
 	"P1O[45],Colors,16 (Original),32 (Patent);",
 	"P1-;",
 	"P1O[122:121],Aspect Ratio,Original,Full Screen,[ARC1],[ARC2];",
-	"P1O[125:123],Scale,Normal,V-Integer,HV-Integer-,HV-Integer+,HV-Integer;",	
+	"P1O[125:123],Scale,Normal,V-Integer,HV-Integer-,HV-Integer+,HV-Integer;",
+	"P1-;",
+	// == VIDEO STATUS ==
+	"h0P1-,Changes Pending;",
+
 
 	// === SYSTEM ===
 	"P2,System;",
@@ -125,19 +146,43 @@ localparam CONF_STR = {
 	"P2O[32],UART Output,Modem,Printer;",	
 	"P2O[11:9],Mapper Fallback,Standard,Timeshare,Money Minder,APL/S,Info. Manager,4K RAM,BASIC;",
 	"P2-;",
+	"DAP2R[28],Unload Cartridge;",
 	"P2T[27],Master Control (Soft Reset);",
 	"-;",
-	"DAR[28],Unload Cartridge;",
+
 
 	// === RESET ===
 	"R[0],Reset;",
+
 
 	// === CONTROLS ===
 	"J,Fire,Fire (Paired);",
 	"jn,A,B;",
 
+
 	// === INFO MESSAGES ===
-	"I,Keyboard entry started,Bad keyboard file,Tape error,Tape rewound,Tape busy,Tape idle,Keyboard entry finished,Keyboard entry aborted,Calibrating sticks,End of tape,Printer no image,Printer scanning,Printer ready,Printer starting,Printer active,Printer flushing,Printer stalled,Printer full,Printer error,Printer read only,Printer bad image,Printer incomplete image,Printer storage error,Printer framing error,Printer overflow,Printer media changed,Printer reset interrupted,Invalid or unsupported cartridge;",
+	// numbering is 1-based and used by info/pending_info below
+	"I,",
+		"Keyboard entry started,",
+		"Bad keyboard file,",
+		"Tape error,",
+		"Tape rewound,",
+		"Tape busy,",
+		"Tape idle,",
+		"Keyboard entry finished,",
+		"Keyboard entry aborted,",
+		"Calibrating sticks,",
+		"End of tape,",
+		"Invalid or unsupported cartridge,",
+		"Printer no image,",
+		"Printer ready,",
+		"Printer busy,",
+		"Capture active,",
+		"Capture started,",
+		"Capture saved,",
+		"Printer image full,",
+		"Printer image read only,",
+		"Printer error;",
 	"v,1;",
 	"V,v",`BUILD_DATE
 };
@@ -189,9 +234,11 @@ wire tape_ended = |tape_deck_ended;
 wire tape_busy = |tape_deck_busy;
 wire tape_error = |tape_deck_error;
 wire tape_rewound = |tape_deck_rewound;
+// in-menu status lines: 0 video change pending, 1 tape created, 2 playback rewound, 3 record rewound
+reg [3:0] osd_notes = 0;
 wire [15:0] menu_mask = {1'b0, !printer_mounted, !joystick_connected || !status[38], printer_error != 0, printer_busy && !printer_active, ~cart_loaded, printer_active, ~tape_busy,
                          !printer_busy && printer_error == 0 && printer_status == 2, !printer_busy, status[19],
-                         !joystick_connected, 4'b0011};
+                         !joystick_connected, osd_notes};
 reg info_req = 0;
 reg [7:0] info = 0, pending_info = 0;
 wire [5:0] sd_blk_cnt[3];
@@ -473,11 +520,19 @@ reg [3:0] printer_status_d = 0, printer_error_d = 0;
 reg printer_notice_error = 0;
 reg [7:0] printer_notice = 0;
 reg printer_query_d = 0;
-wire [7:0] printer_message = printer_error == 2 ? 8'd20 :
-    printer_error == 3 ? 8'd21 : printer_error == 4 ? 8'd22 :
-    printer_error == 5 ? 8'd23 : printer_error == 6 ? 8'd24 :
-    printer_error == 7 ? 8'd25 : printer_error == 9 ? 8'd26 :
-    printer_error == 10 ? 8'd27 : 8'd11 + {4'd0,printer_status};
+localparam [7:0] MSG_PRINTER_NO_IMAGE = 8'd12, MSG_PRINTER_READY = 8'd13, MSG_PRINTER_BUSY = 8'd14,
+                 MSG_CAPTURE_ACTIVE = 8'd15, MSG_CAPTURE_STARTED = 8'd16, MSG_CAPTURE_SAVED = 8'd17,
+                 MSG_PRINTER_FULL = 8'd18, MSG_PRINTER_READ_ONLY = 8'd19, MSG_PRINTER_ERROR = 8'd20;
+// error 1 not mounted, 2 read only, 8 full; the rest are image or capture faults
+wire [7:0] printer_error_message = printer_error == 1 ? MSG_PRINTER_NO_IMAGE :
+    printer_error == 2 ? MSG_PRINTER_READ_ONLY : printer_error == 8 ? MSG_PRINTER_FULL : MSG_PRINTER_ERROR;
+// status 0 no image, 1 scanning, 2 ready, 3 starting, 4 active, 5 flushing, 6 stalled, 7 full, 8 error
+wire [7:0] printer_state_message = printer_error != 0 ? printer_error_message :
+    printer_status == 0 ? MSG_PRINTER_NO_IMAGE : printer_status == 2 ? MSG_PRINTER_READY :
+    printer_status == 3 || printer_status == 4 ? MSG_CAPTURE_ACTIVE :
+    printer_status == 7 ? MSG_PRINTER_FULL : printer_status == 8 ? MSG_PRINTER_ERROR : MSG_PRINTER_BUSY;
+wire printer_query = status[36] && !printer_query_d;
+reg printer_flushing = 0;
 reg [5:0] tape_info_frames = 0;
 always @(posedge clk_sys) begin
     printer_status_d <= printer_status;
@@ -486,12 +541,22 @@ always @(posedge clk_sys) begin
     if (reset || status[22]) begin
         printer_notice <= 0;
         printer_notice_error <= 0;
-    end else if ((printer_status != printer_status_d || printer_error != printer_error_d ||
-                 status[36] && !printer_query_d) &&
-                (!printer_notice_error || status[36] && !printer_query_d)) begin
-        printer_notice <= printer_message;
+    end else if (printer_query) begin
+        // on-demand report replaces any queued notice
+        printer_notice <= printer_state_message;
         printer_notice_error <= printer_error != 0;
+    end else if (printer_error != 0 && printer_error != printer_error_d) begin
+        printer_notice <= printer_error_message;
+        printer_notice_error <= 1;
+    end else if (!printer_notice_error && printer_status != printer_status_d) begin
+        // only milestones pop up; transient states stay in the menu lines
+        if (printer_status == 4 && printer_status_d != 6 && !printer_flushing) printer_notice <= MSG_CAPTURE_STARTED;
+        else if (printer_status == 2 && printer_flushing) printer_notice <= MSG_CAPTURE_SAVED;
+        else if (printer_status == 2 && printer_status_d == 1) printer_notice <= MSG_PRINTER_READY;
     end
+    if (reset || printer_error != 0) printer_flushing <= 0;
+    else if (printer_status == 5) printer_flushing <= 1;
+    else if (printer_status == 2) printer_flushing <= 0;
 	source_started_d <= source_started;
 	source_complete_d <= source_complete;
 	source_error_d <= source_error;
@@ -537,7 +602,7 @@ always @(posedge clk_sys) begin
 		if (tape_rewound) pending_info <= 4;
 		if (source_error && !source_error_d) pending_info <= 2;
 		if (tape_error && !tape_error_d) pending_info <= 3;
-		if (cart_load_error && !cart_load_error_d) pending_info <= 28;
+		if (cart_load_error && !cart_load_error_d) pending_info <= 11;
 	end
 end
 
@@ -579,6 +644,37 @@ always @(posedge clk_sys) begin
 			requested_output <= status[42:41] == 3 ? 2'd0 : status[42:41];
 			apply_video_pending <= 1;
 		end
+	end
+end
+
+// Main creates and mounts the new tape before pulsing Create New Tape, so a
+// record mount just before the pulse means the creation succeeded
+reg osd_d = 0, new_tape_d = 0;
+reg [1:0] tape_deck_busy_d = 0;
+reg [5:0] record_mount_frames = 0;
+wire [1:0] selected_output = status[42:41] == 3 ? 2'd0 : status[42:41];
+always @(posedge clk_sys) begin
+	osd_d <= OSD_STATUS;
+	new_tape_d <= status[46];
+	tape_deck_busy_d <= tape_deck_busy;
+	osd_notes[0] <= selected_output != video_output || apply_video_pending;
+	if (vid_vs && !source_vs_d && record_mount_frames != 0) record_mount_frames <= record_mount_frames - 1'b1;
+	if (tape_mounted[1]) begin
+		record_mount_frames <= tape_size != 0 ? 6'd60 : 6'd0;
+		osd_notes[1] <= 0;
+	end
+	if (status[46] && !new_tape_d) begin
+		osd_notes[1] <= record_mount_frames != 0;
+		record_mount_frames <= 0;
+	end
+	if (tape_mounted[0] || tape_deck_busy[0] && !tape_deck_busy_d[0]) osd_notes[2] <= 0;
+	if (tape_mounted[1] || tape_deck_busy[1] && !tape_deck_busy_d[1]) osd_notes[3] <= 0;
+	if (tape_deck_rewound[0]) osd_notes[2] <= 1;
+	if (tape_deck_rewound[1]) osd_notes[3] <= 1;
+	// event lines last until the menu closes
+	if (reset || osd_d && !OSD_STATUS) begin
+		osd_notes[3:1] <= 0;
+		record_mount_frames <= 0;
 	end
 end
 

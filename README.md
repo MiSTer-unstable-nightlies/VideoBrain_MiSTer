@@ -29,8 +29,8 @@ See [accuracy and remaining work](docs/ACCURACY.md).
 | OSD action | File | Guide |
 | --- | --- | --- |
 | Load Cartridge | `.bin`, `.vbc` | [Cartridge assembly and mapping](docs/CARTRIDGES.md) |
-| Mount Playback Tape | `.vbt` | [Read-only tape playback](docs/TAPE.md) |
-| Mount Record Tape | `.vbt` | [Tape recording](docs/TAPE.md) |
+| Tapes > Mount Playback Tape | `.vbt` | [Read-only tape playback](docs/TAPE.md) |
+| Tapes > Mount Record Tape | `.vbt` | [Tape recording](docs/TAPE.md) |
 | Keyboard > Load Keyboard File | `.vbk` | [Automatic key entry and music](docs/KEYBOARD-INPUT.md) |
 | Printer > Mount Capture Image | `.vbp` | [Printer capture and export](docs/PRINTER.md) |
 

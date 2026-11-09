@@ -74,6 +74,14 @@ Original-machine measurements and MiSTer acceptance tests remain separate.
     ./obj_dir_headless/Vtop --res1 /path/to/res1.bin --res2 /path/to/res2.bin --cart /path/to/cartridge.bin --frames 300 --shot-last
     ./obj_dir_headless/Vtop --help
 
+Machine tracing: `--machine-trace <csv>` writes passive pre-edge write strobes,
+IRQ changes and bus PC visits selected with `--watch-pc <hex>` (repeatable),
+including scanline and field parity. PC visits are bus observations, not
+instruction retirement counts.
+
+The Tennis adaptation diagnostics that drive this simulator live with the game
+source in the sibling VideoBrain-ASM repository (`tennis/diagnostics/`).
+
 Known cartridge ROMs are identified by CRC-32. `--cart-type` selects the slot profile only for unrecognized images.
 
 `--expander1 <file>` loads the separate 2K Expander 1 firmware. See [Expander 1](../docs/EXPANDER1.md) for firmware and peripheral details. `make test-expander1` tests its ROM loading, host wiring, 3870 timer and interrupt execution. `make test-expander1-record` exercises original-ROM recording, decodes its digital capture and checks good/bad checksum status. It requires the firmware.

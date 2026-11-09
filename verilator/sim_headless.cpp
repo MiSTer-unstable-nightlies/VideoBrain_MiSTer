@@ -434,6 +434,8 @@ static void usage(const char* argv0) {
 "  --joy-pot C:V@F:H   override pot channel 0..7 with 0..255 for H frames; last wins.\n"
 "  --frame-log          one line per frame with size and hash\n"
 "  --probe              per-frame UV201 fetcher/FIFO activity counters\n"
+"  --machine-trace FILE  passive CSV of bus writes, IRQ changes and watched PCs\n"
+"  --watch-pc HEX       PC visit to include in machine trace; repeatable\n"
 "  --joy-trace F        log joystick control and freeze changes from frame F\n"
 "  --joy-focus F        trace joystick timing and BIOS operands only in frame F\n"
 "  --joy-results F      log BIOS joystick returns and bounds from frame F\n"
@@ -481,6 +483,8 @@ int main(int argc, char** argv) {
     long frames = 300, max_cycles = 2000000000;
     long shot_every = 0, dump_every = 0, trace_cpu = 0, trace_from = 0;
     bool money_trace = false;
+    std::string machine_trace_path;
+    std::set<unsigned> machine_watch;
     bool progressive = false;
     long joy_trace_from = -1;
     long joy_focus_frame = -1;
@@ -612,6 +616,15 @@ int main(int argc, char** argv) {
         }
         else if (a == "--frame-log")   frame_log = true;
         else if (a == "--probe")       probe = true;
+        else if (a == "--machine-trace") machine_trace_path = need("--machine-trace");
+        else if (a == "--watch-pc") {
+            char* end = nullptr;
+            unsigned long value = strtoul(need("--watch-pc"), &end, 16);
+            if (!end || *end || value > 0xffff) {
+                fprintf(stderr, "error: --watch-pc needs a 16-bit hex address\n"); return 1;
+            }
+            machine_watch.insert(unsigned(value));
+        }
         else if (a == "--joy-trace")   joy_trace_from = atol(need("--joy-trace"));
         else if (a == "--joy-focus")   joy_focus_frame = atol(need("--joy-focus"));
         else if (a == "--joy-results") joy_results_from = atol(need("--joy-results"));
@@ -724,6 +737,14 @@ int main(int argc, char** argv) {
     unsigned snoop_ram = ~0u, snoop_reg = ~0u, snoop_read = ~0u, snoop_write = ~0u;
 
     Verilated::commandArgs(argc, argv);
+    FILE* mf = nullptr;
+    if (!machine_trace_path.empty()) {
+        mf = fopen(machine_trace_path.c_str(), "w");
+        if (!mf) { fprintf(stderr, "error: cannot write machine trace\n"); return 2; }
+        setvbuf(mf, nullptr, _IOLBF, 0);
+        fprintf(mf, "cycle,frame,kind,pc,pc1,acc,flags,j,r0,r1,r2,r10,vpos,field,addr,data,irq,ack,video_irq,joy_irq,smi_enabled\n");
+    }
+    unsigned machine_write = ~0u, machine_io = ~0u, machine_irq = ~0u, machine_pc = ~0u;
     top = new Vtop();
     top->playback_data = 1;
 
@@ -892,6 +913,37 @@ int main(int argc, char** argv) {
                 tape_level = 1;
             }
             tape_remote = remote;
+        }
+
+        if (mf) {
+            auto event = [&](const char* kind, unsigned address, unsigned data) {
+                fprintf(mf, "%ld,%ld,%s,%04X,%04X,%02X,%02X,%02X,%02X,%02X,%02X,%02X,%u,%u,%04X,%02X,%u,%u,%u,%u,%u\n",
+                        cycles, fg.frame, kind, unsigned(top->rootp->top__DOT__pc0),
+                        unsigned(top->rootp->top__DOT__pc1), unsigned(CPU(acc)),
+                        unsigned(CPU(iozcs)), unsigned(CPU(scratch_regs)[9]),
+                        unsigned(CPU(scratch_regs)[0]), unsigned(CPU(scratch_regs)[1]),
+                        unsigned(CPU(scratch_regs)[2]), unsigned(CPU(scratch_regs)[10]),
+                        unsigned(CORE(vpos)), unsigned(top->rootp->top__DOT__field),
+                        address, data, unsigned(CORE(int_req)), unsigned(CORE(int_ack)),
+                        unsigned(CORE(yint_irq)), unsigned(CORE(joy_int)), unsigned(SMI(ext_enable)));
+            };
+            auto strobe = [&](bool enabled, unsigned address, unsigned data,
+                              unsigned& previous, const char* kind) {
+                unsigned signature = enabled ? (address << 8) | data : ~0u;
+                if (enabled && signature != previous) event(kind, address, data);
+                previous = signature;
+            };
+            strobe(BUS(bus_wr), BUS(a_eff), BUS(bus_wdata), machine_write, "write");
+            strobe(CORE(io_wr), CORE(io_addr), CORE(io_wdata), machine_io, "io-write");
+            unsigned irq = CORE(int_req) | (CORE(int_ack) << 1) | (CORE(yint_irq) << 2) |
+                           (CORE(joy_int) << 3) | (SMI(ext_enable) << 4);
+            if (irq != machine_irq) event("irq", 0, irq);
+            machine_irq = irq;
+            if (CORE(cpu_ce)) {
+                unsigned pc = top->rootp->top__DOT__pc0;
+                if (pc != machine_pc && machine_watch.count(pc)) event("pc-visit", pc, 0);
+                machine_pc = pc;
+            }
         }
 
         // sample write enables before the edge that commits them
@@ -1382,6 +1434,7 @@ int main(int argc, char** argv) {
     if (rf) fclose(rf);
     if (ef) fclose(ef);
     if (sf) fclose(sf);
+    if (mf) fclose(mf);
     delete top;
     return 0;
 }

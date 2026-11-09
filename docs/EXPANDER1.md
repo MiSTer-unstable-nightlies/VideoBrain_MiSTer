@@ -41,6 +41,27 @@ For managed MiSTer UART services, set the baud rate to match Timeshare: 300 or 1
 
 The modem connector is separate from the host cable. `Set 2/Image (73).jpg` corrects its pins to receive 4, transmit 2, and signal ground 1.
 
+## Planned investigation: 1200-baud serial
+
+Investigate 1200-baud support in Tiny BASIC Enhanced and a separately identified
+Timeshare cartridge patch. This is roadmap work, not verified support. The
+[Expander 1 manual](https://orphanedgames.com/videobrain/manuals/Expander_1/Expander%201%20%281978%29%28VideoBrain%29.pdf)
+specifies 110/300/1200-baud serial operation, but current validation covers
+110/300 only, with live Timeshare sessions confirmed at 300.
+
+First trace command `04` and its timing table in the original Expander ROM to
+identify the 1200 selector and actual bit timing. Then inspect Timeshare's
+baud-selection handlers and host receive/display path for interrupt deadlines
+and buffering limits. A faster serial bit rate does not establish that the
+terminal can receive and render sustained text without dropping characters.
+
+Check HPS UART setup, bridge tools and printer capture decoding at the same
+rate. Any prototype must retain the original ROMs, use a distinct patch/version,
+and preserve 110/300 operation. Hardware acceptance should cover bidirectional
+text, sustained receive with scrolling, routing and reset; BASIC also needs
+serial return after tape operations. No implementation or build is included
+in this investigation item.
+
 ## Timeshare over UART
 
 The working path is Timeshare -> Expander 1 serial port -> MiSTer HPS UART -> Linux -> remote server. Select System > UART Output > **Modem** (the default). Linux replaces the telephone connection with a network bridge. Expander 2 dialing, acoustic coupling, and telephone-line behavior are bypassed, not emulated.

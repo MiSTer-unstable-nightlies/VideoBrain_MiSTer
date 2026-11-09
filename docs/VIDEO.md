@@ -1,6 +1,6 @@
 # Video output
 
-Select **Video > Output**, then **Apply Video Output**.
+Select **Video > Output**, then **Apply Video Output**. **Changes Pending** shows under Apply until the selected output is active.
 
 | Output | Behavior |
 | --- | --- |

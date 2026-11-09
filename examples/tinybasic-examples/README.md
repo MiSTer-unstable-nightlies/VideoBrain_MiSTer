@@ -6,7 +6,8 @@ File. Load one file at a time with automatic repeat disabled. Keep hands
 off the keyboard while loading. Each file selects letter mode initially
 and ends in letter mode.
 
-These are VBK2 inputs. Cores supporting automatic Tiny BASIC acknowledgement
+Files 49-52 use acknowledged VBK4 input; earlier files are VBK2 inputs.
+Cores supporting automatic Tiny BASIC acknowledgement
 wait for each key and command to complete; older cores use the encoded timing.
 See [acknowledged entry](../../docs/KEYBOARD-INPUT.md#tiny-basic-acknowledged-entry).
 File integrity and source regeneration are
@@ -75,6 +76,46 @@ SAVE/LOAD preserve program text, including DATA, rather than variable or array
 values. Enhanced 1.2 passes a hardware round trip with a 39-byte INPUT program:
 VBK entry, SAVE, core reload, playback-only mounting, LOAD, LIST and RUN.
 The saved record has a valid CRC. Multi-record hardware acceptance remains pending.
+
+## Enhanced 2.0 tape acceptance (49-52)
+
+Use Enhanced 2.0 (`4ACC6012`) with Expander firmware. These new checks await
+hardware verification. Repeated LOAD, LIST/RUN, segmented LIST and continued
+serial output already pass with another eight-line program.
+
+Prepare a disposable source tape with `36-tape-save.vbk`: mount a writable
+record image, rewind record, run 36, and wait for TAPE OK and the user LED to
+clear. Mount that image for playback. It contains the five-line TAPE PASS
+fixture, spanning two records. Preserve any program needed before these tests.
+
+Rewind playback before every VERI, COMP, DUPE or LOAD below. Use separate
+source and destination images for DUPE. Each VBK completes one stage; perform
+the mount/rewind steps manually between files. Keep keyboard repeat disabled.
+
+| Step | VBK | Expected result |
+| --- | --- | --- |
+| 1 | `49-tape-veri.vbk` | Replaces memory with a one-line sentinel. VERI reports TAPE OK despite differing memory; LIST still shows only `10 PRINT "MEMORY KEEP"`; RUN prints MEMORY KEEP, followed by VERI RETURN. |
+| 2 | `37-tape-load.vbk` | Restores the source fixture. TAPE OK; LIST shows lines 10-50; RUN prints TAPE PASS, 7 and 9. |
+| 3 | `50-tape-comp.vbk` | With that fixture still in memory, COMP reports TAPE OK. LIST/RUN remain correct, followed by COMP RETURN. |
+| 4 | `51-tape-comp-mismatch.vbk` | Changes line 10 to TAPE FAIL, retaining its length. COMP reports TAPE ERROR. LIST 10,1 still shows TAPE FAIL, followed by COMP ERROR RETURN. |
+| 5 | `52-tape-dupe.vbk` | First mount a different writable destination and rewind record. Replaces memory with the sentinel, then copies the source tape. Expect TAPE OK, the unchanged sentinel in LIST/RUN, then DUPE RETURN. |
+| 6 | `37-tape-load.vbk` | After recording is idle and the user LED clears, mount the DUPE destination for playback and rewind it. TAPE OK; LIST/RUN reproduce TAPE PASS, 7 and 9. |
+
+Observe each tape message as well as the final marker: a marker only proves
+command return. Serial should continue through every stage, including the
+intentional COMP mismatch. Keep a terminal or video capture of the sequence.
+
+Additional checks: the original smoke check after LOAD; VERI on a blank or
+damaged tape must report an error while preserving memory; empty-program
+SAVE/LOAD; and missing-Expander/error recovery. For a blank-tape check, reuse
+49 with a separate blank playback image and expect an error, MEMORY KEEP and
+VERI RETURN. Recovery on these failure paths remains unverified.
+
+Generate the new files with acknowledged input:
+
+```sh
+python tools/keyboard_input.py examples/tinybasic-examples/49-tape-veri.txt --profile tinybasic --start-mode letters --ready
+```
 
 ## Color combinations (38-42)
 

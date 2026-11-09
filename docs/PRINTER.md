@@ -7,7 +7,7 @@ capture controller sends no acknowledgements or response characters.
 
 ## Capture a report or session
 
-With VideoBrain image-creation support in Main_MiSTer, **Printer > New Capture Image** creates and mounts a 1 MiB blank in the `saves` subdirectory of the core's games directory. Files are named `Printer_1.vbp`, `Printer_2.vbp`, and so on without replacing existing files. Close the OSD to see the result, then wait for Ready before starting capture. This entry is disabled while the printer is busy. Older Main versions require the blank-file procedure below.
+With VideoBrain image-creation support in Main_MiSTer, **Printer > New Capture Image** creates and mounts a 1 MiB blank in the `saves` subdirectory of the core's games directory. Files are named `Printer_1.vbp`, `Printer_2.vbp`, and so on without replacing existing files. Close the OSD to see the result, then wait for **Printer ready** before starting capture. This entry is disabled while the printer is busy. Older Main versions require the blank-file procedure below.
 
 Information Manager's original prototype has printer row-count and serial
 startup problems in the tested execution path. Printer > InfoMan Fix (Reload)
@@ -19,19 +19,17 @@ the recognized original image; automatic mapper detection still applies.
 1. Copy `examples/blank-printer.vbp` to the SD card under a new name, or create
    an image with the tool below. Use a different file from either tape image.
 2. Load Expander 1 firmware and a cartridge with printer support.
-3. In **Printer > Mount Capture Image**, mount that file. Wait for scanning to
-   finish; **Show Capture Status** reports Ready. Mounting does not write the file.
-4. Select **Capture Baud**, then **Start Capture**. Wait for Active before
-   requesting printer output. Information Manager uses 300; Timeshare uses its
-   selected 110/300 transmission rate. Baud changes apply to the next session.
+3. In **Printer > Mount Capture Image**, mount that file. The menu shows **Printer Busy** while the image is scanned, and a **Printer ready** popup follows. Mounting does not write the file.
+4. Select **Capture Baud**, then **Start Capture**. Wait for **Capture started** (or **Printer Active** in the menu) before requesting printer output. Information Manager uses 300; Timeshare uses its selected 110/300 transmission rate. Baud changes apply to the next session.
 5. In Information Manager REVIEW, request `P DESC PTR`, `P ALL PTR`, or
    `TOTAL PTR` with the usual database/tape prerequisites. For simultaneous
    Timeshare, keep **System > UART Output > Modem** and run the normal UART
    bridge. The Printer UART selection remains an alternative diagnostic path.
-6. When output finishes, choose **Stop and Save**, then wait for Ready and the
-   user LED to clear. Unmount the printer image before exporting it, modifying
+6. When output finishes, choose **Stop Capture and Save**, then wait for **Capture saved** and the user LED to clear. Unmount the printer image before exporting it, modifying
    it from Linux, switching cores, or removing media. Tape activity can also
    keep the LED on; check the individual status before changing either image.
+
+Popups appear once the OSD closes: **Capture started**, **Capture saved**, **Printer ready** after a mount scan, **Printer image full**, **Printer image read only**, **Printer no image**, and **Printer error** for any image or capture fault (bad or incomplete image, storage mismatch, serial framing, buffer overflow, media change, reset during capture). **Show Capture Status** reports the current state on demand: no image, ready, busy, capture active, or one of the errors.
 
 Capture starts stopped after core startup. Stop/Start and clean remount append
 separate sessions. Existing captured bytes are never intentionally overwritten.
@@ -62,12 +60,7 @@ cartridge. Without a responding Expander, serial output disables itself.
 Output includes the startup banner, prompts, keyboard echo and PRINT/LIST
 results. Screen wrapping does not insert serial line breaks.
 
-For a test transcript, mount a blank `.vbp`, select 300 baud and Start
-Capture, then enter or load the test. Choose Stop and Save before exporting
-with `extract_printer.py`. Reset stops capture; start a new capture after
-reset. UART capture uses System > UART Output > Printer and the same 300-baud
-Linux capture command below. Serial mirroring runs at about 27 characters
-per second and slows screen output. Enhanced 0.8 hardware validation is pending.
+For a test transcript, mount a blank `.vbp`, select 300 baud and Start Capture, then enter or load the test. Choose **Stop Capture and Save** before exporting with `extract_printer.py`. Reset stops capture; start a new capture after reset. UART capture uses System > UART Output > Printer and the same 300-baud Linux capture command below. Serial mirroring runs at about 27 characters per second and slows screen output. Enhanced 0.8 hardware validation is pending.
 
 ## Tools
 
